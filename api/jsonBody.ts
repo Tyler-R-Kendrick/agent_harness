@@ -1,6 +1,10 @@
-import type { IncomingMessage } from 'node:http';
-
 export const DEFAULT_MAX_JSON_BODY_BYTES = 1_000_000;
+
+type JsonBodyRequest = AsyncIterable<Buffer | string> & {
+  headers: {
+    'content-length'?: string | string[];
+  };
+};
 
 export class JsonBodyError extends Error {
   constructor(
@@ -17,7 +21,7 @@ export function isJsonBodyError(error: unknown): error is JsonBodyError {
 }
 
 export async function readJsonBody(
-  req: IncomingMessage,
+  req: JsonBodyRequest,
   options: { maxBytes?: number } = {},
 ): Promise<unknown> {
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_JSON_BODY_BYTES;
@@ -41,7 +45,7 @@ export async function readJsonBody(
   if (!chunks.length) return {};
 
   try {
-    return JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf-8'));
+    return JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf-8')) ?? {};
   } catch {
     throw new JsonBodyError(400, 'Request body must be valid JSON.');
   }
