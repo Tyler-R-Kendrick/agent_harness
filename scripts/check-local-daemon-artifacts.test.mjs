@@ -6,6 +6,10 @@ import {
   formatTrackedGeneratedArtifactsError,
 } from './check-generated-files-clean.mjs';
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const localDaemonArtifactPatterns = [
   'agent-daemon/dist/',
   'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
@@ -15,7 +19,7 @@ const localDaemonArtifactPatterns = [
 for (const ignoreFilePath of ['.gitignore', '.dockerignore', '.vercelignore']) {
   const ignoreFile = readFileSync(new URL(`../${ignoreFilePath}`, import.meta.url), 'utf8');
   for (const pattern of localDaemonArtifactPatterns) {
-    assert.match(ignoreFile, new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'm'));
+    assert.match(ignoreFile, new RegExp(`^${escapeRegExp(pattern)}$`, 'm'));
   }
 }
 
