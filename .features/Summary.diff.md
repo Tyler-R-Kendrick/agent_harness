@@ -1,34 +1,36 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-07
-Baseline: `.features/Summary.md` refreshed through the 2026-06-06 Hermes Agent corpus.
-Diff type: additive updates after the 2026-06-07 OpenAI Symphony refresh
+Updated: 2026-06-08
+Baseline: `.features/Summary.md` refreshed through the 2026-06-07 OpenAI Symphony corpus.
+Diff type: additive updates after the 2026-06-08 Claude Cowork refresh
 
 ## Net new normalized features
 
-### Added: Tracker-backed claim leases with heartbeat expiry and restart recovery
-- Why now: the refreshed OpenAI Symphony corpus adds a first-party lease layer that persists worker ownership in the tracker and then extends that model into Jira.
+### Added: Cloud-brokered remote MCP connectors with tool-level policy ceilings
+- Why now: the refreshed Claude Cowork corpus now has a precise first-party connector contract for remote MCP, cloud-brokered network access, and cross-surface tool policy enforcement that was not captured in the earlier Cowork slice.
 - Research delta:
-  - Symphony PR #82 adds claim lease state with worker id, workspace path, retry attempt, heartbeat timestamp, expiry, and operator-visible recovery events
-  - the same PR publishes active, retrying, and blocked lease markers back to the tracker and surfaces that state in the JSON API and LiveView dashboard
-  - Symphony PR #83 adds Jira support for reading and upserting those lease markers by editing existing comments instead of appending unbounded heartbeat spam
-  - together, the two PRs turn safe restart recovery from an in-memory orchestration detail into a durable tracker contract that can survive daemon restarts and cross-tracker deployments
+  - Anthropic's current connector docs now expose custom connectors using remote MCP on Claude, Cowork, and Claude Desktop, including URL plus optional OAuth settings from `Customize > Connectors`
+  - the connector traffic originates from Anthropic's cloud even when the user is running Cowork locally, so MCP servers must be public or explicitly allowlist Anthropic IP ranges
+  - Anthropic explicitly separates these remote connectors from local MCP servers configured in `claude_desktop_config.json`, and says the local-desktop path is not available in Cowork
+  - Enterprise custom roles can now scope access to whole connectors or individual tools with `Always allow`, `Needs approval`, and `Blocked`, and those ceilings are enforced across web, desktop, mobile, and Cowork
+  - connector loading also has `Auto` versus `On demand` modes, which makes connector density part of the active conversation contract instead of a hidden global setting
 
 ## Expanded normalized features
 
-### Expanded: Issue-tracker control planes
-- Why now: the refreshed OpenAI Symphony corpus shows the tracker evolving from intake queue into durable runtime coordination surface.
+### Expanded: External tool connectivity and actionability
+- Why now: the refreshed Claude Cowork corpus shows a stronger distinction between cloud-brokered connectors and local-machine integrations than the current summary captured.
 - Research delta:
-  - Symphony no longer treats tracker state as just task metadata; it now writes lease ownership and recovery state back into tracker comments
-  - Jira support means the same runtime coordination contract is being designed to survive beyond one tracker adapter
-  - this pushes the broader control-plane idea toward tracker-native ownership, heartbeat, and handoff semantics instead of relying only on local orchestrator memory
+  - Cowork is not just exposing "more connectors"; it is defining which integrations run through Anthropic's cloud and therefore inherit cross-surface account portability and central policy enforcement
+  - the docs now spell out that local MCP and remote MCP are different trust planes with different reachability and policy assumptions
+  - Enterprise connector permissions can cap or block individual tools before the user-level approval menu is even shown, which is stronger than a generic read-write connector toggle
+  - this pushes the broader connectivity pattern toward explicit connector brokerage, policy ceilings, and portable approval semantics rather than one-off local tool wiring
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add tracker-backed claim leases with heartbeat expiry and restart recovery
+### Proposed Linear feature: Add cloud-brokered remote MCP connectors with tool-level policy ceilings
 - Linear issue title:
-  - `Add tracker-backed claim leases with heartbeat expiry and restart recovery`
+  - `Add cloud-brokered remote MCP connectors with tool-level policy ceilings`
 - Suggested problem statement:
-  - `agent-browser` can run long-lived and background work, but it still lacks a durable ownership contract that survives orchestrator restarts, multiple runners, and tracker reconnects. Competitors are starting to persist worker leases back into the issue tracker with heartbeat, expiry, blocked, and retry state so dispatch recovery does not duplicate live work or silently strand tasks after host failure. Without a tracker-backed lease model, restart recovery stays fragile, operator trust stays low, and multi-runner orchestration cannot scale safely across tracker adapters. The product needs explicit claim leases that are visible in both the tracker and operator UI, portable across tracker providers, and capable of safe handoff when leases expire.`
+  - `agent-browser` already exposes tools and MCP-style integrations, but it still treats most connectivity as a local-session concern instead of a portable connector plane with centralized policy. Competitors are now separating remote MCP connectors from local-machine MCP, brokering those remote connectors through an account-level cloud path that works across desktop, mobile, web, and Cowork surfaces while enforcing per-tool ceilings before a run ever starts. Without an explicit remote-connector control plane, agent-browser cannot give teams portable connected actions, clear network-boundary semantics, or reliable cross-client approval policy. The product needs a cloud-brokered connector layer for remote MCP services, a visible distinction between local and remote trust planes, and role-aware per-tool ceilings that remain consistent across every client surface.`
 - One-shot instruction for an LLM:
-  - Implement tracker-backed claim leases for `agent-browser`: whenever a task is claimed, persist a durable lease record containing worker id, workspace path, attempt number, heartbeat timestamp, expiry, and blocked or retry state; surface the lease in the operator UI and the tracker itself; refuse duplicate dispatch when an unexpired external lease already exists; recover expired or dead-worker leases by requeueing or handing off the task safely; update existing tracker markers in place when possible to avoid comment spam; and keep the lease abstraction portable so Linear, Jira, and future tracker adapters can share the same ownership and recovery contract.
+  - Implement cloud-brokered remote MCP connectors for `agent-browser`: add an account or workspace connector registry for remote MCP endpoints with optional OAuth configuration; make those connectors callable from browser, desktop, mobile, and background runs without re-registering them per client; clearly show whether each integration is `remote_cloud_brokered` or `local_host_attached`; require public reachability or explicit allowlist guidance for cloud-brokered endpoints; add per-tool policy ceilings such as `always_allow`, `needs_approval`, and `blocked` that are enforced before user-level approval preferences; and ensure blocked or capped tools render consistently across every client and fail closed when policy or connector state cannot load.
