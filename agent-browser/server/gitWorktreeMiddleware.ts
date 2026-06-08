@@ -69,6 +69,7 @@ const EMPTY_SUMMARY: GitWorktreeSummary = Object.freeze({
   untracked: 0,
   conflicts: 0,
 });
+const INVALID_DIFF_PATH_ERROR = 'Requested path must be a worktree-relative file path.';
 
 export class GitWorktreeBridge {
   private readonly spawn: SpawnLike;
@@ -123,30 +124,26 @@ export class GitWorktreeBridge {
   }
 
   async getDiff({ path: filePath }: { path: string }): Promise<GitWorktreeDiffResponse> {
-    const unstaged = await this.runGit(['diff', '--', filePath]);
+    const sanitizedPath = validateDiffPath(filePath);
+    const unstaged = await this.runGit(['diff', '--', sanitizedPath]);
     if (unstaged.stdout.trim()) {
-      return createDiffResponse(filePath, unstaged.stdout, 'unstaged');
+      return createDiffResponse(sanitizedPath, unstaged.stdout, 'unstaged');
     }
 
-    const staged = await this.runGit(['diff', '--cached', '--', filePath]);
+    const staged = await this.runGit(['diff', '--cached', '--', sanitizedPath]);
     if (staged.stdout.trim()) {
-      return createDiffResponse(filePath, staged.stdout, 'staged');
+      return createDiffResponse(sanitizedPath, staged.stdout, 'staged');
     }
 
-    const status = parsePorcelainStatus((await this.runGit(['status', '--porcelain=v1', '-z', '--', filePath])).stdout)[0];
+    const status = parsePorcelainStatus((await this.runGit(['status', '--porcelain=v1', '-z', '--', sanitizedPath])).stdout)[0];
     if (status?.status === 'untracked') {
       const worktreeRoot = (await this.runGit(['rev-parse', '--show-toplevel'])).stdout.trim();
-      const absolutePath = path.resolve(worktreeRoot, filePath);
-      const normalizedRoot = path.resolve(worktreeRoot);
-      const relativePath = path.relative(normalizedRoot, absolutePath);
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        throw new Error('Requested path is outside the worktree.');
-      }
+      const absolutePath = resolveWorktreePath(worktreeRoot, sanitizedPath);
       const contents = await readFile(absolutePath, 'utf-8');
-      return createDiffResponse(filePath, createAddedFilePatch(filePath, contents), 'untracked');
+      return createDiffResponse(sanitizedPath, createAddedFilePatch(sanitizedPath, contents), 'untracked');
     }
 
-    return createDiffResponse(filePath, '', 'none');
+    return createDiffResponse(sanitizedPath, '', 'none');
   }
 
   private runGit(args: string[]): Promise<RunGitResult> {
@@ -251,6 +248,32 @@ function summarizeChanges(files: GitWorktreeFileChange[]): GitWorktreeSummary {
   }), { ...EMPTY_SUMMARY });
 }
 
+function validateDiffPath(filePath: string): string {
+  const trimmed = filePath.trim();
+  const normalized = path.normalize(trimmed);
+  if (
+    !trimmed
+    || trimmed.startsWith(':')
+    || trimmed.includes('\0')
+    || path.isAbsolute(trimmed)
+    || normalized === '..'
+    || normalized.startsWith(`..${path.sep}`)
+  ) {
+    throw new Error(INVALID_DIFF_PATH_ERROR);
+  }
+  return normalized;
+}
+
+function resolveWorktreePath(worktreeRoot: string, filePath: string): string {
+  const absolutePath = path.resolve(worktreeRoot, filePath);
+  const normalizedRoot = path.resolve(worktreeRoot);
+  const relativePath = path.relative(normalizedRoot, absolutePath);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    throw new Error(INVALID_DIFF_PATH_ERROR);
+  }
+  return absolutePath;
+}
+
 function createDiffResponse(filePath: string, patch: string, source: GitWorktreeDiffResponse['source']): GitWorktreeDiffResponse {
   return {
     path: filePath,
@@ -314,6 +337,10 @@ export function createGitWorktreeApiMiddleware(worktreeBridge = bridge) {
 
       writeJson(res, 405, { error: 'Method not allowed.' });
     } catch (error) {
+      if (error instanceof Error && error.message === INVALID_DIFF_PATH_ERROR) {
+        writeJson(res, 400, { error: error.message });
+        return;
+      }
       next(error instanceof Error ? error : new Error('Git worktree middleware failed.'));
     }
   };
