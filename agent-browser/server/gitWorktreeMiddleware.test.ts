@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
-import { GitWorktreeBridge, createAddedFilePatch } from './gitWorktreeMiddleware';
+import { GitWorktreeBridge, createAddedFilePatch, createGitWorktreeApiMiddleware } from './gitWorktreeMiddleware';
 
 function createMockProcess() {
   const process = new EventEmitter() as EventEmitter & {
@@ -168,6 +168,40 @@ describe('GitWorktreeBridge', () => {
     });
     const bridge = new GitWorktreeBridge({ spawn, cwd: 'C:/repo' });
 
-    await expect(bridge.getDiff({ path: '../repo2/secret.txt' })).rejects.toThrow('outside the worktree');
+    await expect(bridge.getDiff({ path: '../repo2/secret.txt' })).rejects.toThrow('worktree-relative file path');
+  });
+
+  it('rejects pathspec-style diff requests before invoking git', async () => {
+    const spawn = vi.fn();
+    const bridge = new GitWorktreeBridge({ spawn: spawn as never, cwd: 'C:/repo' });
+
+    await expect(bridge.getDiff({ path: ':(glob)**/*.ts' })).rejects.toThrow('worktree-relative file path');
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it('returns a client error for invalid diff paths', async () => {
+    const spawn = vi.fn();
+    const middleware = createGitWorktreeApiMiddleware(new GitWorktreeBridge({ spawn: spawn as never, cwd: 'C:/repo' }));
+    const req = {
+      method: 'GET',
+      url: '/api/git-worktree/diff?path=%3A%28glob%29**%2F*.ts',
+    } as never;
+    const headers = new Map<string, string>();
+    const res = {
+      statusCode: 0,
+      setHeader: vi.fn((name: string, value: string) => {
+        headers.set(name, value);
+      }),
+      end: vi.fn(),
+    } as never;
+    const next = vi.fn();
+
+    await middleware(req, res, next);
+
+    expect(res.statusCode).toBe(400);
+    expect(headers.get('Content-Type')).toBe('application/json; charset=utf-8');
+    expect(res.end).toHaveBeenCalledWith(JSON.stringify({ error: 'Requested path must be a worktree-relative file path.' }));
+    expect(next).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
   });
 });
