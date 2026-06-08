@@ -293,4 +293,44 @@ describe('WorkGraph command bus', () => {
       'workspace.created',
     ]);
   });
+
+  it('snapshots agent proposal validation metadata without freezing the caller-owned proposal', async () => {
+    const graph = createWorkGraph({
+      repository: createInMemoryWorkGraphRepository(),
+      ids: createSequentialWorkGraphIdFactory('wg'),
+      now: createFixedWorkGraphTimeSource('2026-05-10T12:00:00.000Z'),
+    });
+    const workspace = await graph.dispatch({
+      type: 'workspace.create',
+      actor,
+      payload: { name: 'Agent proposal workspace', key: 'APW' },
+    });
+    const team = await graph.dispatch({
+      type: 'team.create',
+      actor,
+      payload: { workspaceId: workspace.aggregateId, name: 'Agents', key: 'AGT' },
+    });
+    const proposal = createAgentIssueProposal({
+      workspaceId: workspace.aggregateId,
+      teamId: team.aggregateId,
+      title: 'Review mutable validation proposal',
+      description: 'Proposal metadata must be stored as history, not a live caller reference.',
+      branchName: 'agent/workgraph/mutable-validation',
+      requestedBy: { id: 'planner-agent' },
+      validation: ['npm.cmd --workspace @agent-harness/workgraph run test:coverage'],
+    });
+
+    const issue = await applyAgentIssueProposal(graph, proposal);
+
+    expect(() => {
+      proposal.validation.push('npm.cmd audit --audit-level=moderate');
+    }).not.toThrow();
+    expect(proposal.validation).toEqual([
+      'npm.cmd --workspace @agent-harness/workgraph run test:coverage',
+      'npm.cmd audit --audit-level=moderate',
+    ]);
+    expect(graph.getSnapshot().issues[issue.aggregateId]?.metadata.validation).toEqual([
+      'npm.cmd --workspace @agent-harness/workgraph run test:coverage',
+    ]);
+  });
 });
