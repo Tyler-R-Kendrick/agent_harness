@@ -15,6 +15,7 @@
     "eval:chat-loop": "npm run eval:codi-general",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
+    "eval:route-selection-dsr": "node scripts/run-agentv-route-selection-dsr-eval.mjs",
     "eval:self-reflection": "node scripts/run-agentv-self-reflection-eval.mjs",
     "eval:tour-guide": "node scripts/run-agentv-tour-guide-eval.mjs",
     "eval:web-search": "node scripts/run-agentv-web-search-eval.mjs",
