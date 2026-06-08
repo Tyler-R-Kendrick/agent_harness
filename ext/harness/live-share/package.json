@@ -2,6 +2,12 @@
   "name": "@agent-harness/ext-live-share",
   "version": "0.1.0",
   "description": "Live-share extension for policy-gated collaborative session control over WebRTC.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Tyler-R-Kendrick/agent_harness.git",
+    "directory": "ext/harness/live-share"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
