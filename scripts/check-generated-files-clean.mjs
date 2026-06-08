@@ -141,6 +141,13 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.pnpm-store' || filePath.startsWith('.pnpm-store/'),
   },
   {
+    label: 'node_modules/',
+    matches: (filePath) =>
+      filePath === 'node_modules' ||
+      filePath.startsWith('node_modules/') ||
+      filePath.includes('/node_modules/'),
+  },
+  {
     label: '_cacache/',
     matches: (filePath) => filePath === '_cacache' || filePath.startsWith('_cacache/'),
   },
@@ -235,6 +242,18 @@ export const GENERATED_ARTIFACT_RULES = [
   {
     label: 'ext/provider/local-model-connector/dist/*.map',
     matches: (filePath) => /^ext\/provider\/local-model-connector\/dist\/[^/]+\.map$/u.test(filePath),
+  },
+  {
+    label: '.playwright-mcp/',
+    matches: (filePath) => filePath === '.playwright-mcp' || filePath.startsWith('.playwright-mcp/'),
+  },
+  {
+    label: '.codex-verify-*/',
+    matches: (filePath) => /^\.codex-verify-[^/]+(?:\/|$)/u.test(filePath),
+  },
+  {
+    label: '.tmp-*',
+    matches: (filePath) => /^\.tmp-[^/]+(?:\/|$)/u.test(filePath),
   },
 ];
 

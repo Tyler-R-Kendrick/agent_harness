@@ -105,12 +105,16 @@ const requiredLocalArtifactIgnorePatterns = [
   'junit.xml',
   'test-results.xml',
   '.pnpm-store/',
+  'node_modules/',
   '*.orig',
   '*.rej',
   '*.swp',
   '*.swo',
   '*.sublime-workspace',
   '.idea/',
+  '.playwright-mcp/',
+  '.codex-verify-*/',
+  '.tmp-*',
 ];
 
 for (const ignoreFilePath of ['.gitignore', '.dockerignore', '.vercelignore']) {
@@ -134,6 +138,14 @@ const trackedArtifacts = findTrackedGeneratedArtifacts([
   'junit.xml',
   'agent-browser/test-results.xml',
   '.pnpm-store/v3/files/index.json',
+  'node_modules/vite/package.json',
+  'lib/webmcp/node_modules/vitest/package.json',
+  '.playwright-mcp/session.json',
+  '.codex-verify-agent-browser/state.json',
+  '.tmp-agent-run/output.txt',
+  'agent-daemon/dist/index.js',
+  'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+  'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
   'agent-harness-0.1.0.tgz',
   'lib/webmcp/agent-harness-webmcp-0.1.0.tgz',
   'README.md.orig',
@@ -160,6 +172,20 @@ assert.deepEqual(trackedArtifacts, [
   { path: 'junit.xml', rule: 'junit.xml' },
   { path: 'agent-browser/test-results.xml', rule: 'test-results.xml' },
   { path: '.pnpm-store/v3/files/index.json', rule: '.pnpm-store/' },
+  { path: 'node_modules/vite/package.json', rule: 'node_modules/' },
+  { path: 'lib/webmcp/node_modules/vitest/package.json', rule: 'node_modules/' },
+  { path: '.playwright-mcp/session.json', rule: '.playwright-mcp/' },
+  { path: '.codex-verify-agent-browser/state.json', rule: '.codex-verify-*/' },
+  { path: '.tmp-agent-run/output.txt', rule: '.tmp-*' },
+  { path: 'agent-daemon/dist/index.js', rule: 'agent-daemon/dist/' },
+  {
+    path: 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+    rule: 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
+  {
+    path: 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+    rule: 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
   { path: 'agent-harness-0.1.0.tgz', rule: '*.tgz' },
   { path: 'lib/webmcp/agent-harness-webmcp-0.1.0.tgz', rule: '*.tgz' },
   { path: 'README.md.orig', rule: '*.orig' },
@@ -189,6 +215,14 @@ assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /blob-repor
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /junit\.xml/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/test-results\.xml/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.pnpm-store\/v3\/files\/index\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /node_modules\/vite\/package\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /lib\/webmcp\/node_modules\/vitest\/package\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.playwright-mcp\/session\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.codex-verify-agent-browser\/state\.json/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /\.tmp-agent-run\/output\.txt/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-daemon\/dist\/index\.js/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /agent-browser\/public\/downloads\/agent-harness-local-inference-daemon-windows-x64\.exe/);
+assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /ext\/worker\/local-inference-worker\/dist\/agent-harness-local-inference-daemon-windows-x64\.exe/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /lib\/webmcp\/agent-harness-webmcp-0\.1\.0\.tgz/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /README\.md\.orig/);
 assert.match(formatTrackedGeneratedArtifactsError(trackedArtifacts), /patches\/local-change\.rej/);
