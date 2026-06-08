@@ -1,7 +1,7 @@
 # Claude Cowork
 
 - Harness: Claude Cowork
-- Refreshed: 2026-05-23
+- Refreshed: 2026-06-08
 
 ## Current feature map
 - `desktop-agentic-vm`
@@ -13,6 +13,7 @@
 - `computer-use-and-dispatch`
 - `enterprise-governance-analytics`
 - `split-execution-architecture-and-device-controls`
+- `cloud-brokered-remote-mcp-connectors-and-tool-policy-ceilings`
 
 ## First-party sources used in this refresh
 - [Claude Cowork product page](https://www.anthropic.com/product/claude-cowork)
@@ -28,9 +29,12 @@
 - [View usage analytics for Team and Enterprise plans](https://support.claude.com/en/articles/12883420-usage-analytics-for-team-and-enterprise-plans)
 - [Monitor Claude Cowork activity with OpenTelemetry](https://support.claude.com/en/articles/14477985-monitor-claude-cowork-activity-with-opentelemetry)
 - [Claude Cowork desktop architecture overview](https://support.claude.com/en/articles/14479288-claude-cowork-desktop-architecture-overview)
+- [Use connectors to extend Claude's capabilities](https://support.claude.com/en/articles/11176164-use-connectors-to-extend-claude-s-capabilities)
+- [Get started with custom connectors using remote MCP](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp)
+- [Manage custom roles on Enterprise plans](https://support.claude.com/en/articles/13930452-manage-custom-roles-on-enterprise-plans)
 
 ## Screenshots and demos
-- Anthropic provides product visuals across the Cowork product page and Help Center articles for projects, plugins, mobile dispatch, scheduled tasks, and computer use.
+- Anthropic provides product visuals across the Cowork product page and Help Center articles for projects, plugins, mobile dispatch, scheduled tasks, and computer use. The connector docs are more configuration-heavy and currently do not appear to include a dedicated Cowork-specific remote-MCP demo asset.
 
 ## Product signal
-Cowork has moved beyond an early desktop agent preview into a full knowledge-work harness with local project workspaces, recurring task automation, mobile dispatch, plugin packaging, computer-use fallback, and enterprise controls around adoption, telemetry, and device policy. The strongest newer signal is architectural: Anthropic is explicitly separating host-native tool access from isolated code execution instead of pretending all agent actions fit one security boundary.
+Cowork has moved beyond an early desktop agent preview into a full knowledge-work harness with local project workspaces, recurring task automation, mobile dispatch, plugin packaging, computer-use fallback, remote-MCP connector brokerage, and enterprise controls around adoption, telemetry, and device policy. The strongest newer signals are architectural: Anthropic is explicitly separating host-native tool access from isolated code execution, and it is also separating cloud-brokered connector trust from local-machine MCP trust instead of pretending all integrations fit one boundary.

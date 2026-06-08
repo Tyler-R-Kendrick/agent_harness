@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-07
+Updated: 2026-06-08
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -175,7 +175,7 @@ Method: current-product research from first-party product pages, help centers, d
   - Add install-time trust surfaces for `agent-browser` skills and plugins: generate a human-readable provenance card for each package, show source and version metadata plus scanner results before install, fail closed on blocked verification states, separate trust metadata from executable prompt content, and provide explicit override or rescan flows for authorized operators.
 
 ### 25. Hotkey appshots that attach live window context to an agent thread
-- Common pattern: harnesses are beginning to capture the user’s active desktop window as structured context instead of relying on the user to manually restate what is already visible.
+- Common pattern: harnesses are beginning to capture the user's active desktop window as structured context instead of relying on the user to manually restate what is already visible.
 - Seen in: Codex Appshots on macOS, where a hotkey attaches the current app window to a thread with a screenshot and any available text so the agent can immediately work from what the user is looking at.
 - Why it matters: many high-value agent interactions start from transient UI state, documents, dashboards, or error screens that are expensive to re-describe accurately in chat.
 - One-shot build instruction:
@@ -215,3 +215,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once an agent system runs as a daemon, safe recovery depends on durable ownership state rather than in-memory claims that disappear on restart.
 - One-shot build instruction:
   - Add tracker-backed claim leases to `agent-browser`: persist per-task worker ownership with worker id, workspace path, attempt, heartbeat, expiry, and blocked or retry state; publish that lease to the task tracker and operator UI; honor unexpired external leases during dispatch; recover expired leases by requeueing or handing off work safely; and keep the lease model portable across tracker adapters instead of hard-coding it to one provider.
+
+### 31. Cloud-brokered remote MCP connectors with tool-level policy ceilings
+- Common pattern: some harnesses are splitting "connected tools" into a cloud-brokered connector plane with cross-surface policy enforcement instead of treating every MCP or app integration as a local-only plugin.
+- Seen in: Claude Cowork remote MCP connectors that are added through account-level connector settings, run from Anthropic's cloud even when the user is in Cowork on desktop, require public-network reachability or IP allowlisting, and can be constrained by Enterprise custom roles down to individual connector tools with `Always allow`, `Needs approval`, or `Blocked` ceilings that carry across web, desktop, mobile, and Cowork.
+- Why it matters: integration portability is much stronger when the same connector works across clients, but that only scales in teams if the harness also makes the network boundary and approval ceiling explicit.
+- One-shot build instruction:
+  - Add a cloud-brokered connector plane to `agent-browser` that can register remote MCP services at the account or workspace layer, call them from browser, desktop, mobile, and background surfaces, make the remote-vs-local trust boundary explicit in the UI, require public or allowlisted reachability for cloud-brokered endpoints, and enforce per-tool policy ceilings such as `always_allow`, `needs_approval`, and `blocked` consistently across every client.
