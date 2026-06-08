@@ -15,8 +15,23 @@ function readText(relativePath: string) {
 
 describe('live-share package boundary', () => {
   it('publishes only runtime plugin files', () => {
-    const packageJson = readJson('package.json');
+    const packageJson = readJson('package.json') as {
+      exports?: Record<string, string>;
+      files?: string[];
+      license?: string;
+      repository?: {
+        directory?: string;
+        type?: string;
+        url?: string;
+      };
+    };
 
+    expect(packageJson.license).toBe('MIT');
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'https://github.com/Tyler-R-Kendrick/agent_harness.git',
+      directory: 'ext/harness/live-share',
+    });
     expect(packageJson.exports).toEqual({
       '.': './src/index.ts',
       './manifest': './agent-harness.plugin.json',
@@ -33,8 +48,13 @@ describe('live-share package boundary', () => {
   it('documents the stable import and private source boundary', () => {
     const readme = readText('README.md');
 
+    expect(readme).toContain('License: MIT');
+    expect(readme).toContain(
+      'Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/harness/live-share',
+    );
     expect(readme).toContain("import { createLiveSharePlugin } from '@agent-harness/ext-live-share';");
     expect(readme).toContain("import manifest from '@agent-harness/ext-live-share/manifest';");
     expect(readme).toContain('Do not deep-import files under `src/`');
+    expect(readme).toContain('Published package contents are limited to');
   });
 });
