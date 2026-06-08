@@ -1,0 +1,23 @@
+slug: solace-agi
+name: Solace AGI
+vendor: Solace AGI
+segment: local-first-governed-browser-agent-platform
+product_path: competition/solace-agi
+design_path: competition/solace-agi/design
+features_path: competition/solace-agi/features
+marketing_path: competition/solace-agi/marketing
+gossip_path: competition/solace-agi/gossip
+snapshot_date: 2026-06-08
+primary_sources:
+  - https://www.solaceagi.com/docs
+  - https://solaceagi.com/browser.html
+  - https://solaceagi.com/sv/features
+  - https://solaceagi.com/ja/pricing
+  - https://www.solaceagi.com/zu/press-releases/agent-native-platform
+secondary_sources:
+  - https://www.reddit.com/r/automation/comments/1rf100z/most_ai_agent_browser_control_is_just_brittle/
+  - https://www.reddit.com/r/automation/comments/1rrno54/why_is_browser_automation_still_so_fragile/
+positioning: "Local-first browser automation with human approval, scoped permissions, reusable recipes, and evidence vaults."
+customer_model: "Free local/BYOK entry, low-cost individual and team plans, enterprise evidence retention and Part 11-oriented audit positioning."
+competitive_threat_level: medium
+notes: "Most relevant as a trust and evidence design competitor rather than a pure browser-hosting vendor."

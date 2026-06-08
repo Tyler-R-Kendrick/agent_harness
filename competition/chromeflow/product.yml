@@ -1,0 +1,21 @@
+slug: chromeflow
+name: Chromeflow
+vendor: Chromeflow / NeoDrew
+segment: local-real-chrome-mcp-plugin
+product_path: competition/chromeflow
+design_path: competition/chromeflow/design
+features_path: competition/chromeflow/features
+marketing_path: competition/chromeflow/marketing
+gossip_path: competition/chromeflow/gossip
+snapshot_date: 2026-06-08
+primary_sources:
+  - https://chromeflow.run/
+secondary_sources:
+  - https://www.reddit.com/r/aiagents/comments/1tmhzlw/chromeflow_agentic_browser_mcp_that_drives_real/
+  - https://www.reddit.com/r/mcp/comments/1thujy7/update_chromeflow_v097_multiinstance_mcp_race_fix/
+  - https://www.reddit.com/r/mcp/comments/1tpwx0v/browser_mcp_for_claude_code_browserbase_vs_the/
+  - https://www.reddit.com/r/codex/comments/1r41igh/controlling_chrome_from_codex_a_la_claude_in/
+positioning: "A Chrome extension and Claude Code/Codex MCP plugin for guided browser actions in the user's real Chrome session."
+customer_model: "Open-source/free developer distribution through plugin installation and Chrome extension setup."
+competitive_threat_level: medium
+notes: "Directly pressures agent-browser on real-session setup work, human-in-the-loop SaaS workflows, and Codex/Claude distribution."
