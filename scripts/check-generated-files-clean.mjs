@@ -189,6 +189,18 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('.heapsnapshot'),
   },
   {
+    label: 'agent-daemon/dist/',
+    matches: (filePath) => filePath === 'agent-daemon/dist' || filePath.startsWith('agent-daemon/dist/'),
+  },
+  {
+    label: 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+    matches: (filePath) => filePath === 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
+  {
+    label: 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+    matches: (filePath) => filePath === 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
+  {
     label: 'output/',
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
