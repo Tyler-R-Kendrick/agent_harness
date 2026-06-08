@@ -1,0 +1,31 @@
+name: route-selection-dsr
+version: "1.0"
+description: >
+  AgentV suite for shared route-selection DSR rollout cases. The runtime emits
+  deterministic legacy-versus-DSR routing decisions, and the graders enforce
+  route accuracy, family selection, fallback behavior, and latency discipline
+  before the DSR path is treated as promotion-ready.
+metadata:
+  owner: agent-browser
+  tags: [route-selection, dsr, rollout, tool-trajectory, latency]
+execution:
+  target: agent-browser-route-selection-dsr
+  timeout_seconds: 10
+assertions:
+  - name: route-selection-entrypoint
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: route-selection-dsr
+  - name: route-selection-quality-gate
+    type: code-grader
+    required: true
+    command: ["node", "./graders/route-selection-dsr-gate.mjs"]
+  - name: bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 2
+    max_tokens: 1500
+    max_duration_ms: 2000
+tests: ./cases.jsonl
