@@ -41,6 +41,10 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath.endsWith('.log'),
   },
   {
+    label: 'report.*.json',
+    matches: (filePath) => /(?:^|\/)report\.[^/]+\.json$/u.test(filePath),
+  },
+  {
     label: '*.tmp',
     matches: (filePath) => filePath.endsWith('.tmp'),
   },

@@ -54,6 +54,7 @@ test-results.xml
 .next/
 *.tsbuildinfo
 *.log
+report.*.json
 .vite/
 .vitest/
 .turbo/

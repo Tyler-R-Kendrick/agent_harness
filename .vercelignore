@@ -55,6 +55,7 @@ output/
 **/.next/
 *.tsbuildinfo
 *.log
+report.*.json
 .vite/
 **/.vite/
 .vitest/
