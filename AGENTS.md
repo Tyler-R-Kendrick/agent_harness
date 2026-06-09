@@ -12,7 +12,7 @@ Do not assume `$env:CODEX_HOME` is already set in automation shells. If you need
 If you make agent-skills, put them in the root skill dir (~/skills). symlink them into the "~/.agents/skills" dir.
 Always make them using Anthropic's "skill-creator" skill (npx skills add https://github.com/anthropics/skills --skill skill-creator)
 
-- Bundled skills live canonically under `skills/<skill-name>/`.
+- Bundled skills live canonically under `skills/<skill-name>`.
 - `.agents/skills/<skill-name>` and `.claude/skills/<skill-name>` must be symlinks to `../../skills/<skill-name>`.
 - When adding or updating a bundled skill, make changes in `skills/` and keep both compatibility symlinks in sync.
 - Do not duplicate or hand-edit copied skill trees under `.agents/skills/` or `.claude/skills/`; use the symlinks instead.
@@ -38,6 +38,8 @@ Run the smallest deterministic validation set that covers the files you changed.
 - `agent-browser/tests/**`, visual UI changes, or browser runtime behavior: run the relevant Playwright/Cucumber project command or `npm.cmd run visual:agent-browser`.
 - `lib/<name>/**`, `harness-core/**`, or `ext/*/*/**`: run that workspace's `test:coverage`, plus its `lint`/`build` scripts when those scripts exist and the change affects public or compiled surfaces.
 - `scripts/**`, root package metadata, or workspace orchestration: run the script tests that cover those scripts and any directly affected package command.
+
+Before running a workspace `test`, `test:coverage`, `lint`, or `build` script that depends on package-local tools such as Vitest, run `npm.cmd run prepare:workspace-tests -- --workspace <workspace-name>` from the repo root in Codex automation sessions. This resolves the workspace package, verifies the declared runner is installed, and if it is missing performs one package-prefix install for only the declared runner packages, using `--prefix <package-dir>`, `--no-save`, `--no-package-lock`, `--ignore-scripts`, `--no-audit`, `--no-fund`, `--prefer-offline`, and the repo `.npm-cache`. Do not report `Cannot find module 'vitest/package.json'` as a validation blocker until this preparation command has failed; if it fails, report the prep command output instead.
 
 Run `npm.cmd run verify:agent-browser` only when the change spans multiple projects, touches dependency/audit/CI/release behavior, changes the verifier itself, prepares a release/merge gate, or the user explicitly asks for the full gate. Treat warnings or failures from any validation you do run as blocking and fix them in the same turn whenever they are in scope and can be fixed without reverting user work.
 
