@@ -1,0 +1,25 @@
+slug: lovable
+name: Lovable
+vendor: Lovable
+segment: prompt-to-app-agent-workspace
+product_path: competition/lovable
+design_path: competition/lovable/design
+features_path: competition/lovable/features
+marketing_path: competition/lovable/marketing
+gossip_path: competition/lovable/gossip
+snapshot_date: 2026-06-09
+primary_sources:
+  - https://docs.lovable.dev/introduction/getting-started
+  - https://docs.lovable.dev/features/design
+  - https://docs.lovable.dev/features/code-mode
+  - https://docs.lovable.dev/integrations/supabase
+  - https://docs.lovable.dev/features/publish
+  - https://docs.lovable.dev/introduction/plans-and-credits
+secondary_sources:
+  - https://www.reddit.com/r/lovable/comments/1snh0e7/i_tested_lovable_vs_other_ai_builders_for_mobile/
+  - https://www.reddit.com/r/lovable/comments/1q9qtpi/aigenerated_mobile_uis_feel_incomplete_and/
+  - https://www.reddit.com/r/lovable/comments/1qx3oj0/id_honestly_just_pay_someone_to_finish_my_app_at/
+positioning: "Conversational AI app builder for turning prompts, screenshots, and visual edits into deployed web apps."
+customer_model: "Free, Pro, Business, and Enterprise plans with daily and monthly credits, collaboration, custom domains, and separate backend/provider billing."
+competitive_threat_level: high
+notes: "Strong for non-technical MVP creation and polished web UI iteration; weaker when complex logic, native mobile, staging, and production hardening become central."

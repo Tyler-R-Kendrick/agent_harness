@@ -1,0 +1,27 @@
+slug: bolt-new
+name: Bolt.new
+vendor: StackBlitz
+segment: prompt-to-app-agent-workspace
+product_path: competition/bolt-new
+design_path: competition/bolt-new/design
+features_path: competition/bolt-new/features
+marketing_path: competition/bolt-new/marketing
+gossip_path: competition/bolt-new/gossip
+snapshot_date: 2026-06-09
+primary_sources:
+  - https://github.com/stackblitz/bolt.new
+  - https://support.bolt.new/building/intro-bolt
+  - https://support.bolt.new/building/quickstart
+  - https://support.bolt.new/building/using-bolt/projects-files
+  - https://support.bolt.new/integrations/git
+  - https://support.bolt.new/building/deploy
+  - https://support.bolt.new/faqs/account-and-subscription/tokens
+  - https://support.bolt.new/faqs/troubleshooting/webcontainer
+secondary_sources:
+  - https://www.reddit.com/r/boltnewbuilders/comments/1stb7vi/april_23rd_2026_boltnew_keeps_resetting_to/
+  - https://www.reddit.com/r/boltnewbuilders/comments/1srpt31/do_any_bugs_ever_get_fixed_at_bolt/
+  - https://www.reddit.com/r/boltnewbuilders/comments/1l8caa3/fed_up_with_boltnew/
+positioning: "Browser-native full-stack app builder where the AI can create, run, edit, install packages, inspect console output, and deploy."
+customer_model: "Free and paid StackBlitz/Bolt subscriptions with token allowances, private projects, team sharing, GitHub sync, Bolt hosting, and optional Netlify publishing."
+competitive_threat_level: high
+notes: "Strongest differentiator is WebContainers environment control in the browser; weakest points are token burn, WebContainer limits, and bug-loop frustration."
