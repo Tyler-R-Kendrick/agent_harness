@@ -1,0 +1,23 @@
+slug: vercel-v0
+name: v0
+vendor: Vercel
+segment: prompt-to-app-and-ui-generation
+product_path: competition/vercel-v0
+design_path: competition/vercel-v0/design
+features_path: competition/vercel-v0/features
+marketing_path: competition/vercel-v0/marketing
+gossip_path: competition/vercel-v0/gossip
+snapshot_date: 2026-06-09
+primary_sources:
+  - https://vercel.com/docs/v0
+  - https://vercel.com/blog/updated-v0-pricing
+  - https://vercel.com/blog/working-with-figma-and-custom-design-systems-in-v0-6cZjvh5CBjx0d3ZF967jGj
+  - https://vercel.com/pricing
+secondary_sources:
+  - https://www.reddit.com/r/vercel/comments/1ktcdpz/v0_pricing_concerns_on_current_plan/
+  - https://www.reddit.com/r/vercel/comments/1kbdbt7/why_i_regret_subscribing_to_v0dev/
+  - https://www.reddit.com/r/vercel/comments/1l4m8kh/why_v0s_pricing_change_is_a_masterclass_in_how/
+positioning: "Vercel-native AI pair programmer for generating UI, code, and deployable web projects from natural language."
+customer_model: "Free, Premium, Team, and Vercel platform plans with token-to-credit v0 usage plus separate Vercel infrastructure usage."
+competitive_threat_level: high
+notes: "Especially strong at modern React/Next.js UI and Vercel deployment gravity; weaker when users expect predictable costs or complete full-stack production behavior."
