@@ -48,6 +48,20 @@ targets:
     command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/web-search-agent-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
     cwd: ../../..
 
+  - name: agent-browser-cost-routing-contract
+    provider: cli
+    workers: 1
+    timeout_ms: 10
+    command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/cost-routing-contract-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
+    cwd: ../../..
+
+  - name: agent-browser-route-selection-dsr
+    provider: cli
+    workers: 1
+    timeout_ms: 10
+    command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/route-selection-dsr-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
+    cwd: ../../..
+
   - name: agent-browser-search-fulfillment
     provider: cli
     judge_target: agent-browser-llm-judge
