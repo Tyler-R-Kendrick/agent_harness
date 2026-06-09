@@ -73,6 +73,34 @@ describe('ModelContext', () => {
     expect(registry.list()).toEqual([]);
   });
 
+  it('keeps a replacement tool registered when an old registration signal aborts', async () => {
+    const modelContext = new ModelContext();
+    const firstController = new AbortController();
+    const registry = getModelContextRegistry(modelContext);
+
+    modelContext.registerTool(
+      {
+        name: 'echo',
+        description: 'first tool',
+        execute: () => 'first',
+      },
+      { signal: firstController.signal },
+    );
+
+    expect(registry.unregister('echo')).toBe(true);
+
+    modelContext.registerTool({
+      name: 'echo',
+      description: 'replacement tool',
+      execute: () => 'replacement',
+    });
+
+    firstController.abort();
+
+    expect(registry.get('echo')).toEqual(expect.objectContaining({ description: 'replacement tool' }));
+    await expect(invokeModelContextTool(modelContext, 'echo', {})).resolves.toBe('replacement');
+  });
+
   it('registers a tool with only required params', () => {
     const modelContext = new ModelContext();
 
