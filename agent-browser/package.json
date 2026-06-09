@@ -13,6 +13,7 @@
     "eval:codi-general": "node scripts/run-agentv-codi-general-eval.mjs",
     "eval:codi-staged-search": "node scripts/run-agentv-codi-staged-search-eval.mjs",
     "eval:chat-loop": "npm run eval:codi-general",
+    "eval:cost-routing": "node scripts/run-agentv-cost-routing-eval.mjs",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
     "eval:route-selection-dsr": "node scripts/run-agentv-route-selection-dsr-eval.mjs",
