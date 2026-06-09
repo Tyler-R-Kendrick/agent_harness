@@ -10,7 +10,12 @@ const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
 function readPackageJson() {
   return JSON.parse(readFileSync(resolve(packageRoot, 'package.json'), 'utf8')) as {
+    license?: string;
     main?: string;
+    repository?: {
+      type?: string;
+      url?: string;
+    };
     types?: string;
     files?: string[];
     exports?: Record<string, string>;
@@ -21,6 +26,11 @@ describe('git-stub package boundary', () => {
   it('publishes only the documented root entry point and runtime sources', () => {
     const packageJson = readPackageJson();
 
+    expect(packageJson.license).toBe('MIT');
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/lib/git-stub',
+    });
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({
@@ -38,6 +48,8 @@ describe('git-stub package boundary', () => {
     const readme = readFileSync(resolve(packageRoot, 'README.md'), 'utf8');
 
     expect(readme).toContain('## Package boundary');
+    expect(readme).toContain('License: MIT');
+    expect(readme).toContain('Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/lib/git-stub');
     expect(readme).toContain("import { createGitStubRepository, executeGitStubCommand } from '@agent-harness/git-stub'");
     expect(readme).toContain('`src/repository.ts` and `src/types.ts` are implementation modules');
     expect(readme).toContain('### Public API');
