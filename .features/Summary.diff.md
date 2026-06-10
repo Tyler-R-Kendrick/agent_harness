@@ -1,36 +1,35 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-08
-Baseline: `.features/Summary.md` refreshed through the 2026-06-07 OpenAI Symphony corpus.
-Diff type: additive updates after the 2026-06-08 Claude Cowork refresh
+Updated: 2026-06-10
+Baseline: `.features/Summary.md` refreshed through the 2026-06-09 GitHub Copilot corpus.
+Diff type: additive updates after the 2026-06-10 Mastra refresh
 
 ## Net new normalized features
 
-### Added: Cloud-brokered remote MCP connectors with tool-level policy ceilings
-- Why now: the refreshed Claude Cowork corpus now has a precise first-party connector contract for remote MCP, cloud-brokered network access, and cross-surface tool policy enforcement that was not captured in the earlier Cowork slice.
+### Added: Per-request workspace sandboxes with resumable background continuity
+- Why now: the refreshed Mastra corpus now has a precise first-party runtime contract for request-scoped sandbox routing, background-process continuity, and unified long-running stream resumption that was not captured in the earlier Mastra slice.
 - Research delta:
-  - Anthropic's current connector docs now expose custom connectors using remote MCP on Claude, Cowork, and Claude Desktop, including URL plus optional OAuth settings from `Customize > Connectors`
-  - the connector traffic originates from Anthropic's cloud even when the user is running Cowork locally, so MCP servers must be public or explicitly allowlist Anthropic IP ranges
-  - Anthropic explicitly separates these remote connectors from local MCP servers configured in `claude_desktop_config.json`, and says the local-desktop path is not available in Cowork
-  - Enterprise custom roles can now scope access to whole connectors or individual tools with `Always allow`, `Needs approval`, and `Blocked`, and those ceilings are enforced across web, desktop, mobile, and Cowork
-  - connector loading also has `Auto` versus `On demand` modes, which makes connector density part of the active conversation contract instead of a hidden global setting
+  - the June 4, 2026 Mastra release says `Workspace.sandbox` can now be a resolver function, which means one workspace can route each request into a different isolated sandbox based on request context
+  - resolver-backed workspaces now default to stable placeholder instructions so prompt construction does not provision or leak a caller-owned sandbox unless `instructions.dynamicSandbox` explicitly opts in
+  - Mastra added `sandboxCacheKey` so `execute_command({ background: true })`, `get_process_output`, and `kill_process` can keep using the same sandbox across follow-up requests instead of losing continuity
+  - the same release unifies long-running stream continuity under `stream(..., { untilIdle: true })` and `resumeStream(..., { untilIdle: true })`, deprecating separate `*UntilIdle` methods and endpoints
+  - this ties sandbox routing, background work, and resumed streaming into one coherent runtime surface rather than scattered primitives
 
 ## Expanded normalized features
 
-### Expanded: External tool connectivity and actionability
-- Why now: the refreshed Claude Cowork corpus shows a stronger distinction between cloud-brokered connectors and local-machine integrations than the current summary captured.
+### Expanded: Scheduled automations and background execution
+- Why now: the refreshed Mastra corpus shows stronger continuity guarantees for long-running and resumed execution than the current background-work summary captured.
 - Research delta:
-  - Cowork is not just exposing "more connectors"; it is defining which integrations run through Anthropic's cloud and therefore inherit cross-surface account portability and central policy enforcement
-  - the docs now spell out that local MCP and remote MCP are different trust planes with different reachability and policy assumptions
-  - Enterprise connector permissions can cap or block individual tools before the user-level approval menu is even shown, which is stronger than a generic read-write connector toggle
-  - this pushes the broader connectivity pattern toward explicit connector brokerage, policy ceilings, and portable approval semantics rather than one-off local tool wiring
+  - Mastra is no longer just exposing background-process handles; it now gives those handles a stable sandbox attachment path across follow-up turns
+  - the new `untilIdle` stream and resume contract means long-running work can stay visible through one shared continuation primitive instead of separate special-case endpoints
+  - this pushes the broader background-execution pattern toward explicit runtime continuity, not just "run later and hope the state still lines up"
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add cloud-brokered remote MCP connectors with tool-level policy ceilings
+### Proposed Linear feature: Add per-request workspace sandboxes with resumable background continuity
 - Linear issue title:
-  - `Add cloud-brokered remote MCP connectors with tool-level policy ceilings`
+  - `Add per-request workspace sandboxes with resumable background continuity`
 - Suggested problem statement:
-  - `agent-browser` already exposes tools and MCP-style integrations, but it still treats most connectivity as a local-session concern instead of a portable connector plane with centralized policy. Competitors are now separating remote MCP connectors from local-machine MCP, brokering those remote connectors through an account-level cloud path that works across desktop, mobile, web, and Cowork surfaces while enforcing per-tool ceilings before a run ever starts. Without an explicit remote-connector control plane, agent-browser cannot give teams portable connected actions, clear network-boundary semantics, or reliable cross-client approval policy. The product needs a cloud-brokered connector layer for remote MCP services, a visible distinction between local and remote trust planes, and role-aware per-tool ceilings that remain consistent across every client surface.`
+  - `agent-browser` can already run local or worktree-scoped tasks, but its execution environment is still mostly selected up front and treated as fixed for the life of the run. Competitors are now making sandbox choice part of request routing itself, so the same workspace can place each run into the right isolated environment for that user, thread, or policy context while still preserving continuity for background commands and resumed streams. Mastra now couples request-scoped sandbox resolution with a stable cache key for background-process follow-through and a unified \`untilIdle\` stream or resume contract. Without a similar model, agent-browser will keep forcing operators to choose between fine-grained isolation and reliable long-running execution continuity. The product needs request-scoped sandbox resolution, durable sandbox bindings for resumed work, and one shared continuation contract for long-running foreground and background sessions.`
 - One-shot instruction for an LLM:
-  - Implement cloud-brokered remote MCP connectors for `agent-browser`: add an account or workspace connector registry for remote MCP endpoints with optional OAuth configuration; make those connectors callable from browser, desktop, mobile, and background runs without re-registering them per client; clearly show whether each integration is `remote_cloud_brokered` or `local_host_attached`; require public reachability or explicit allowlist guidance for cloud-brokered endpoints; add per-tool policy ceilings such as `always_allow`, `needs_approval`, and `blocked` that are enforced before user-level approval preferences; and ensure blocked or capped tools render consistently across every client and fail closed when policy or connector state cannot load.
+  - Implement per-request workspace sandboxes for `agent-browser`: let a workspace or run resolve its sandbox from request context such as user, thread, task, or policy; keep prompt construction stable until a concrete sandbox is needed; add a durable sandbox binding key so background commands, process output, kill operations, and resumed runs reconnect to the same isolated environment; expose operator controls to inspect, clear, or rotate those bindings when a sandbox is replaced; and unify long-running stream continuation behind one `until_idle` option for both initial and resumed runs instead of maintaining separate continuation-only APIs.
