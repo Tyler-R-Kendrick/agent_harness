@@ -1,7 +1,7 @@
 # Mastra
 
 - Harness: Mastra
-- Refreshed: 2026-05-29
+- Refreshed: 2026-06-10
 - Research method: first-party Mastra docs, blog posts, product pages, and `mastra-ai/mastra` release notes
 
 ## Feature index
@@ -19,6 +19,7 @@
 - [Observability And OTel Ready Tracing](./observability-and-otel-ready-tracing/README.md)
 - [Observational Memory And Semantic Recall](./observational-memory-and-semantic-recall/README.md)
 - [Observational Memory With Stable Context](./observational-memory-with-stable-context/README.md)
+- [Per-Request Workspace Sandboxes And Unified Until-Idle Streaming](./per-request-workspace-sandboxes-and-unified-until-idle-streaming/README.md)
 - [Reusable Core Harness](./reusable-core-harness/README.md)
 - [Scorers, Datasets, And Experiments](./scorers-datasets-and-experiments/README.md)
 - [Stored Agents And Skills Favorites With Visibility Controls](./stored-agents-and-skills-favorites-with-visibility-controls/README.md)
@@ -30,6 +31,6 @@
 - [Workspaces, AgentFS, And Background Processes](./workspaces-agentfs-and-background-processes/README.md)
 
 ## Notes
-- This refresh keeps the existing Mastra corpus and extends it with the April and May 2026 harness surface that was missing from the older snapshot.
-- The biggest new signals are runtime-editable agents with draft and publish controls, channel-based ingress for Slack or Discord style surfaces, progress-aware background tasks, cross-framework A2A interoperability, and stored agent or skill catalogs with favorite and visibility metadata.
+- This refresh keeps the existing Mastra corpus and extends it with the April, May, and early June 2026 harness surface that was missing from the older snapshot.
+- The biggest new signals are runtime-editable agents with draft and publish controls, channel-based ingress for Slack or Discord style surfaces, progress-aware background tasks, cross-framework A2A interoperability, stored agent or skill catalogs with favorite and visibility metadata, and request-scoped sandboxes that preserve background-process continuity across resumed runs.
 - First-party visuals exist in the Agent Editor, Channels, Browser Support, Platform, and Cloud materials, including screenshots and embedded demos.
