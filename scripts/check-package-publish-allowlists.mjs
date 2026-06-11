@@ -9,6 +9,9 @@ const TEST_FILE_DENYLISTS_BY_EXTENSION = new Map([
 ]);
 const SOURCE_TEST_DIRECTORY_DENYLIST = '!src/__tests__/**';
 const DIST_SOURCE_MAP_DENYLIST = '!dist/**/*.map';
+const RECURSIVE_SRC_PATTERNS = new Set(['src', 'src/**', 'src/**/*']);
+const RECURSIVE_DIST_PATTERNS = new Set(['dist', 'dist/**', 'dist/**/*']);
+const RECURSIVE_EXAMPLES_PATTERNS = new Set(['examples', 'examples/**', 'examples/**/*']);
 const EXAMPLE_TEST_DENYLISTS = [
   '!examples/**/*.test.ts',
   '!examples/**/*.test.tsx',
@@ -17,6 +20,10 @@ const EXAMPLE_TEST_DENYLISTS = [
 
 function normalizePath(filePath) {
   return filePath.replace(/\\/g, '/');
+}
+
+function normalizeFilePattern(pattern) {
+  return normalizePath(pattern).replace(/\/+$/u, '');
 }
 
 function repoRoot() {
@@ -71,8 +78,17 @@ function recursiveSrcPatternExtensions(files) {
   const extensions = new Set();
 
   for (const pattern of files) {
-    const normalized = normalizePath(pattern);
-    if (normalized.startsWith('!') || !normalized.startsWith('src/**/')) continue;
+    const normalized = normalizeFilePattern(pattern);
+    if (normalized.startsWith('!')) continue;
+
+    if (RECURSIVE_SRC_PATTERNS.has(normalized)) {
+      for (const extension of TEST_FILE_DENYLISTS_BY_EXTENSION.keys()) {
+        extensions.add(extension);
+      }
+      continue;
+    }
+
+    if (!normalized.startsWith('src/**/')) continue;
 
     const basenamePattern = normalized.slice('src/**/'.length);
     if (!basenamePattern.startsWith('*.')) continue;
@@ -100,15 +116,15 @@ function recursiveSrcPatternExtensions(files) {
 
 function includesRecursiveDistPattern(files) {
   return files.some((pattern) => {
-    const normalized = normalizePath(pattern);
-    return !normalized.startsWith('!') && (normalized === 'dist/**' || normalized === 'dist/**/*');
+    const normalized = normalizeFilePattern(pattern);
+    return !normalized.startsWith('!') && RECURSIVE_DIST_PATTERNS.has(normalized);
   });
 }
 
 function includesRecursiveExamplesPattern(files) {
   return files.some((pattern) => {
-    const normalized = normalizePath(pattern);
-    return !normalized.startsWith('!') && (normalized === 'examples/**' || normalized === 'examples/**/*');
+    const normalized = normalizeFilePattern(pattern);
+    return !normalized.startsWith('!') && RECURSIVE_EXAMPLES_PATTERNS.has(normalized);
   });
 }
 
