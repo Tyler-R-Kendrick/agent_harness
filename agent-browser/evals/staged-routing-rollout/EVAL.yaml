@@ -1,0 +1,28 @@
+name: staged-routing-rollout
+version: "1.0"
+description: >
+  AgentEvals deterministic staged-rollout suite for benchmark model routing.
+  The router must score request complexity first, pick the objective-weighted
+  benchmark candidate, apply premium-safe policy overrides only when required,
+  and keep the rollout invariants explicit before enforce mode is enabled.
+metadata:
+  owner: agent-browser
+  tags: [routing, staged-rollout, benchmark-routing, policy-override, deterministic]
+execution:
+  target: agent-browser-staged-routing-rollout
+  timeout_seconds: 10
+assertions:
+  - name: staged-routing-tool-trajectory
+    type: tool-trajectory
+    mode: in_order
+    required: true
+    expected:
+      - tool: request-complexity-router
+      - tool: benchmark-objective-router
+      - tool: routing-policy-guard
+      - tool: final-route-decision
+  - name: staged-routing-contract
+    type: code-grader
+    required: true
+    command: ["node", "./graders/staged-routing-rollout-gate.mjs"]
+tests: ./cases.jsonl
