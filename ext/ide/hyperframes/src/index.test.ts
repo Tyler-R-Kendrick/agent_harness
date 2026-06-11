@@ -50,10 +50,14 @@ describe('HyperFrames extension', () => {
 
     expect(context.renderers.list().map((renderer) => renderer.id)).toContain('hyperframes.artifact-preview');
     const tool = context.tools.get('hyperframes.generate');
-    expect(tool?.execute).toBeDefined();
     if (!tool?.execute) {
       throw new Error('Expected hyperframes.generate tool to be executable');
     }
+    expect(tool.inputSchema).toEqual({
+      type: 'object',
+      properties: { title: { type: 'string' } },
+      additionalProperties: true,
+    });
     const generated = await tool.execute({ title: 'Storyboard', style: 'editorial' });
     const defaultNamed = await tool.execute({});
 

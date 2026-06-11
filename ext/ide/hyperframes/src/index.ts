@@ -93,7 +93,6 @@ export function createHyperframesPlugin(): HarnessPlugin {
         inputSchema: {
           type: 'object',
           properties: { title: { type: 'string' } },
-          required: ['title'],
           additionalProperties: true,
         },
         execute: async (rawArgs) => {
