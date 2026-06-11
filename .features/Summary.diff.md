@@ -1,36 +1,35 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-08
-Baseline: `.features/Summary.md` refreshed through the 2026-06-07 OpenAI Symphony corpus.
-Diff type: additive updates after the 2026-06-08 Claude Cowork refresh
+Updated: 2026-06-11
+Baseline: `.features/Summary.md` refreshed through the 2026-06-09 GitHub Copilot corpus.
+Diff type: additive updates after the 2026-06-11 OpenClaw refresh
 
 ## Net new normalized features
 
-### Added: Cloud-brokered remote MCP connectors with tool-level policy ceilings
-- Why now: the refreshed Claude Cowork corpus now has a precise first-party connector contract for remote MCP, cloud-brokered network access, and cross-surface tool policy enforcement that was not captured in the earlier Cowork slice.
+### Added: Registry-verified plugin package artifacts with compatibility gates and drift alerts
+- Why now: the refreshed OpenClaw corpus now shows a stronger first-party package lifecycle than the earlier OpenClaw slice captured. ClawHub is no longer just a place to browse skills and scan results; it now acts as a managed registry for code plugins and bundle plugins with exact artifact verification and managed update signaling.
 - Research delta:
-  - Anthropic's current connector docs now expose custom connectors using remote MCP on Claude, Cowork, and Claude Desktop, including URL plus optional OAuth settings from `Customize > Connectors`
-  - the connector traffic originates from Anthropic's cloud even when the user is running Cowork locally, so MCP servers must be public or explicitly allowlist Anthropic IP ranges
-  - Anthropic explicitly separates these remote connectors from local MCP servers configured in `claude_desktop_config.json`, and says the local-desktop path is not available in Cowork
-  - Enterprise custom roles can now scope access to whole connectors or individual tools with `Always allow`, `Needs approval`, and `Blocked`, and those ceilings are enforced across web, desktop, mobile, and Cowork
-  - connector loading also has `Auto` versus `On demand` modes, which makes connector density part of the active conversation contract instead of a hidden global setting
+  - current ClawHub docs now describe code-plugin and bundle-plugin hosting, native `openclaw plugins install clawhub:<package>` and `openclaw plugins update --all` flows, and package publishing with `clawhub package publish <source>`
+  - package installs validate advertised `pluginApi` and `minGatewayVersion` metadata before archive install starts, which turns compatibility into an explicit install gate instead of a runtime surprise
+  - when a version publishes a ClawPack artifact, OpenClaw prefers the exact uploaded `.tgz`, verifies both the digest header and downloaded bytes, and records artifact metadata for later updates
+  - the same docs expose `--dry-run` publish plans, which lets plugin publishers inspect the exact package release plan before upload
+  - the `2026.6.6` OpenClaw changelog adds managed plugin version-drift reporting, dry runs that can skip publish approval, and trusted-hook install declarations, pushing package lifecycle governance further into the harness core
 
 ## Expanded normalized features
 
-### Expanded: External tool connectivity and actionability
-- Why now: the refreshed Claude Cowork corpus shows a stronger distinction between cloud-brokered connectors and local-machine integrations than the current summary captured.
+### Expanded: Skills, plugins, and reusable workflow packaging
+- Why now: the OpenClaw refresh shows that reusable workflow packaging is maturing from installable prompt bundles into a registry-managed package lane with exact artifacts, compatibility gates, and package-health follow-through after install.
 - Research delta:
-  - Cowork is not just exposing "more connectors"; it is defining which integrations run through Anthropic's cloud and therefore inherit cross-surface account portability and central policy enforcement
-  - the docs now spell out that local MCP and remote MCP are different trust planes with different reachability and policy assumptions
-  - Enterprise connector permissions can cap or block individual tools before the user-level approval menu is even shown, which is stronger than a generic read-write connector toggle
-  - this pushes the broader connectivity pattern toward explicit connector brokerage, policy ceilings, and portable approval semantics rather than one-off local tool wiring
+  - OpenClaw now treats plugin packages as first-class registry objects rather than leaving them in a side-channel package-manager flow
+  - compatibility metadata and artifact digest verification are now part of the install contract, not just publisher conventions
+  - managed version drift is surfaced by the harness itself, which extends packaging from “install once” into “keep package state governed over time”
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add cloud-brokered remote MCP connectors with tool-level policy ceilings
+### Proposed Linear feature: Add registry-verified plugin package artifacts with compatibility gates and drift alerts
 - Linear issue title:
-  - `Add cloud-brokered remote MCP connectors with tool-level policy ceilings`
+  - `Add registry-verified plugin package artifacts with compatibility gates and drift alerts`
 - Suggested problem statement:
-  - `agent-browser` already exposes tools and MCP-style integrations, but it still treats most connectivity as a local-session concern instead of a portable connector plane with centralized policy. Competitors are now separating remote MCP connectors from local-machine MCP, brokering those remote connectors through an account-level cloud path that works across desktop, mobile, web, and Cowork surfaces while enforcing per-tool ceilings before a run ever starts. Without an explicit remote-connector control plane, agent-browser cannot give teams portable connected actions, clear network-boundary semantics, or reliable cross-client approval policy. The product needs a cloud-brokered connector layer for remote MCP services, a visible distinction between local and remote trust planes, and role-aware per-tool ceilings that remain consistent across every client surface.`
+  - `agent-browser` already has skills, plugins, and external tool surfaces, but it still lacks a governed package lifecycle for those extensions. Competitors are moving beyond simple marketplace install buttons: OpenClaw now validates plugin compatibility before install, prefers exact published package artifacts instead of best-effort package resolution, records artifact metadata for later updates, offers dry-run publish planning, and warns when managed plugin versions drift from the expected registry state. Without a comparable package contract, `agent-browser` cannot guarantee what extension artifact was actually installed, cannot reliably block incompatible upgrades, and cannot give operators a durable view of managed extension drift. The product needs a registry-backed package lane that treats plugin and skill artifacts as governed runtime assets rather than anonymous package-manager installs.`
 - One-shot instruction for an LLM:
-  - Implement cloud-brokered remote MCP connectors for `agent-browser`: add an account or workspace connector registry for remote MCP endpoints with optional OAuth configuration; make those connectors callable from browser, desktop, mobile, and background runs without re-registering them per client; clearly show whether each integration is `remote_cloud_brokered` or `local_host_attached`; require public reachability or explicit allowlist guidance for cloud-brokered endpoints; add per-tool policy ceilings such as `always_allow`, `needs_approval`, and `blocked` that are enforced before user-level approval preferences; and ensure blocked or capped tools render consistently across every client and fail closed when policy or connector state cannot load.
+  - Implement a managed extension-package registry flow for `agent-browser`: support registry-hosted skill, plugin, or bundle packages with explicit compatibility metadata such as minimum runtime API and minimum app version; validate that metadata before install; prefer exact published artifacts over opportunistic package resolution; record source, version, digest, and artifact metadata for every installed package; add dry-run publish planning for package authors; and surface managed-version drift warnings plus guided update, pin, or rollback actions in the operator UI so extension lifecycle stays inspectable after install.
