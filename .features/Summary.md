@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-08
+Updated: 2026-06-11
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -64,7 +64,7 @@ Method: current-product research from first-party product pages, help centers, d
 
 ### 9. Hybrid local, worktree, and cloud execution portability
 - Common pattern: the same task can move between local execution, isolated git copies, hosted runtimes, and remote supervision without resetting the thread.
-- Seen in: Codex Local, Worktree, and Cloud modes plus IDE cloud handoff back to local and mobile remote host control, Conductor isolated workspaces plus issue-to-PR task intake, Cursor background or cloud-style agent work with local review, Roomote isolated cloud dev environments with PR delivery, Roo Code local worktrees plus cloud agents, Warp local terminal work plus cloud agents plus explicit `Fork to local` continuation from browser-viewed remote runs.
+- Seen in: Codex Local, Worktree, and Cloud modes plus IDE cloud handoff back to local and mobile remote host control, Conductor isolated workspaces plus issue-to-PR task intake, Cursor background or cloud-style agent work with local review, GitHub Copilot local sandboxes plus cloud sandboxes plus app session continuation, Roomote isolated cloud dev environments with PR delivery, Roo Code local worktrees plus cloud agents, Warp local terminal work plus cloud agents plus explicit `Fork to local` continuation from browser-viewed remote runs.
 - Why it matters: teams want to choose the cheapest or safest execution environment per task without losing context, approvals, or reviewability.
 - One-shot build instruction:
   - Build execution-mode portability so a run can start locally, move into an isolated worktree or cloud environment, and come back for local finishing while preserving thread history, approvals, artifacts, and diff context across every handoff.
@@ -222,3 +222,17 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: integration portability is much stronger when the same connector works across clients, but that only scales in teams if the harness also makes the network boundary and approval ceiling explicit.
 - One-shot build instruction:
   - Add a cloud-brokered connector plane to `agent-browser` that can register remote MCP services at the account or workspace layer, call them from browser, desktop, mobile, and background surfaces, make the remote-vs-local trust boundary explicit in the UI, require public or allowlisted reachability for cloud-brokered endpoints, and enforce per-tool policy ceilings such as `always_allow`, `needs_approval`, and `blocked` consistently across every client.
+
+### 32. Bidirectional agent canvases over editable work objects
+- Common pattern: some harnesses are turning plans, terminals, PRs, browser sessions, and other artifacts into shared surfaces that both the user and the agent can update directly, instead of burying progress inside transcript text.
+- Seen in: GitHub Copilot app canvases, where the app treats the work object as a structured surface, the agent updates it while working, and the human can inspect, edit, reorder, approve, redirect, and verify progress on the same object.
+- Why it matters: supervision gets much easier when progress is grounded in the artifact being changed instead of scattered across status messages and tool logs.
+- One-shot build instruction:
+  - Build bidirectional canvases for `agent-browser` so plans, browser tasks, PR prep, terminal runs, checklists, and similar work objects can render as structured editable surfaces; let agents update canvas state as they work, let users steer or approve directly on that surface, and keep transcript messages linked to concrete object-state changes instead of treating chat as the only source of truth.
+
+### 33. Registry-verified plugin package artifacts with compatibility gates and drift alerts
+- Common pattern: harnesses are starting to treat plugin and workflow-package distribution as a governed runtime surface with exact install artifacts, compatibility checks, and post-install drift signaling instead of a loose package-manager side path.
+- Seen in: OpenClaw ClawHub code-plugin and bundle-plugin package flows, where installs validate `pluginApi` and `minGatewayVersion`, prefer an exact uploaded package artifact, verify digest headers plus downloaded bytes, record source metadata for updates, support dry-run publish plans, and warn when managed plugin versions drift from the expected installed state.
+- Why it matters: once teams depend on packaged agent extensions, they need to know exactly what was installed, whether it matches the current runtime, and when it has drifted away from a managed source of truth.
+- One-shot build instruction:
+  - Add a managed package registry flow to `agent-browser` for skills and plugins that validates runtime compatibility before install, prefers exact published artifacts over opportunistic package resolution, records source and digest metadata for every install, supports dry-run publish plans for package authors, and surfaces managed-version drift warnings plus guided update or rollback actions in the operator UI.
