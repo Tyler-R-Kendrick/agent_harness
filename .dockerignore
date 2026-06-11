@@ -50,6 +50,8 @@ blob-report/
 test-results/
 junit.xml
 test-results.xml
+*.har
+trace.zip
 output/
 .vercel/
 .next/

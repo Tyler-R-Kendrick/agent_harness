@@ -33,6 +33,14 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'test-results.xml' || filePath.endsWith('/test-results.xml'),
   },
   {
+    label: '*.har',
+    matches: (filePath) => filePath.endsWith('.har'),
+  },
+  {
+    label: 'trace.zip',
+    matches: (filePath) => filePath === 'trace.zip' || filePath.endsWith('/trace.zip'),
+  },
+  {
     label: '*.tsbuildinfo',
     matches: (filePath) => filePath.endsWith('.tsbuildinfo'),
   },
