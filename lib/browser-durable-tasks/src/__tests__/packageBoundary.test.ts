@@ -35,8 +35,16 @@ describe('browser-durable-tasks package boundary', () => {
   test('documents the stable root import and private source boundary', () => {
     const readme = readPackageFile('README.md');
 
+    expect(readme).toContain('## Core building blocks');
+    expect(readme).toContain('## Minimal runtime flow');
+    expect(readme).toContain('## Runtime and persistence semantics');
+    expect(readme).toContain('## Outbox and background sync');
     expect(readme).toContain('## Package boundary');
+    expect(readme).toContain('## Failure modes and limits');
     expect(readme).toContain("import { createDurableTaskRuntime } from '@agent-harness/browser-durable-tasks';");
+    expect(readme).toContain('createMemoryDurableTaskStore()');
+    expect(readme).toContain('createServiceWorkerOutboxBridge(...)');
+    expect(readme).toContain('resumeExpiredLocks()');
     expect(readme).toContain('@agent-harness/browser-durable-tasks/src/*');
   });
 
