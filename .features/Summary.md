@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-09
+Updated: 2026-06-11
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -229,3 +229,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: supervision gets much easier when progress is grounded in the artifact being changed instead of scattered across status messages and tool logs.
 - One-shot build instruction:
   - Build bidirectional canvases for `agent-browser` so plans, browser tasks, PR prep, terminal runs, checklists, and similar work objects can render as structured editable surfaces; let agents update canvas state as they work, let users steer or approve directly on that surface, and keep transcript messages linked to concrete object-state changes instead of treating chat as the only source of truth.
+
+### 33. Registry-verified plugin package artifacts with compatibility gates and drift alerts
+- Common pattern: harnesses are starting to treat plugin and workflow-package distribution as a governed runtime surface with exact install artifacts, compatibility checks, and post-install drift signaling instead of a loose package-manager side path.
+- Seen in: OpenClaw ClawHub code-plugin and bundle-plugin package flows, where installs validate `pluginApi` and `minGatewayVersion`, prefer an exact uploaded package artifact, verify digest headers plus downloaded bytes, record source metadata for updates, support dry-run publish plans, and warn when managed plugin versions drift from the expected installed state.
+- Why it matters: once teams depend on packaged agent extensions, they need to know exactly what was installed, whether it matches the current runtime, and when it has drifted away from a managed source of truth.
+- One-shot build instruction:
+  - Add a managed package registry flow to `agent-browser` for skills and plugins that validates runtime compatibility before install, prefers exact published artifacts over opportunistic package resolution, records source and digest metadata for every install, supports dry-run publish plans for package authors, and surfaces managed-version drift warnings plus guided update or rollback actions in the operator UI.
