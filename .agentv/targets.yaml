@@ -62,6 +62,13 @@ targets:
     command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/route-selection-dsr-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
     cwd: ../../..
 
+  - name: agent-browser-staged-routing-rollout
+    provider: cli
+    workers: 1
+    timeout_ms: 10
+    command: node agent-browser/scripts/search-eval-target.mjs --runtime agent-browser/scripts/staged-routing-rollout-eval-target-runtime.ts --eval-id {EVAL_ID} --out {OUTPUT_FILE}
+    cwd: ../../..
+
   - name: agent-browser-search-fulfillment
     provider: cli
     judge_target: agent-browser-llm-judge
