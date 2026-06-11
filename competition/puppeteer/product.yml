@@ -1,0 +1,20 @@
+slug: puppeteer
+name: Puppeteer
+vendor: Google Chrome / Puppeteer maintainers
+segment: browser-automation-library
+product_path: competition/puppeteer
+design_path: competition/puppeteer/design
+features_path: competition/puppeteer/features
+marketing_path: competition/puppeteer/marketing
+gossip_path: competition/puppeteer/gossip
+snapshot_date: 2026-06-11
+primary_sources:
+  - https://pptr.dev/
+  - https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer
+secondary_sources:
+  - https://arxiv.org/abs/2207.01047
+  - https://arxiv.org/abs/2402.09745
+positioning: "High-level JavaScript API for controlling Chrome or Firefox over DevTools Protocol or WebDriver BiDi, with MCP-adjacent usage through Puppeteer-based browser servers."
+customer_model: "Free open-source library distributed through npm; captures developers who want direct programmable browser control rather than a productized agent shell."
+competitive_threat_level: high
+notes: "Not an agent product by itself, but it is the default substrate many browser-agent products build on or compete against."
