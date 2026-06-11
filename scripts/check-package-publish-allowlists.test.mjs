@@ -129,6 +129,16 @@ const allowlistPolicyPackages = [
     },
   },
   {
+    path: 'ext/provider/dist-directory-package/package.json',
+    manifest: {
+      name: '@agent-harness/dist-directory-package',
+      files: [
+        'README.md',
+        'dist/',
+      ],
+    },
+  },
+  {
     path: 'ext/provider/hardened-dist-package/package.json',
     manifest: {
       name: '@agent-harness/hardened-dist-package',
@@ -136,6 +146,26 @@ const allowlistPolicyPackages = [
         'README.md',
         'dist/**',
         '!dist/**/*.map',
+      ],
+    },
+  },
+  {
+    path: 'lib/source-directory/package.json',
+    manifest: {
+      name: '@agent-harness/source-directory',
+      files: [
+        'README.md',
+        'src/',
+      ],
+    },
+  },
+  {
+    path: 'lib/example-directory/package.json',
+    manifest: {
+      name: '@agent-harness/example-directory',
+      files: [
+        'README.md',
+        'examples/',
       ],
     },
   },
@@ -205,6 +235,29 @@ assert.deepEqual(findPackagePublishAllowlistIssues(allowlistPolicyPackages), [
     issues: ['missing !dist/**/*.map for recursive dist publish pattern'],
   },
   {
+    name: '@agent-harness/dist-directory-package',
+    path: 'ext/provider/dist-directory-package/package.json',
+    issues: ['missing !dist/**/*.map for recursive dist publish pattern'],
+  },
+  {
+    name: '@agent-harness/source-directory',
+    path: 'lib/source-directory/package.json',
+    issues: [
+      'missing !src/**/*.test.ts for recursive src ts publish pattern',
+      'missing !src/**/*.test.tsx for recursive src tsx publish pattern',
+      'missing !src/__tests__/** for recursive src publish pattern',
+    ],
+  },
+  {
+    name: '@agent-harness/example-directory',
+    path: 'lib/example-directory/package.json',
+    issues: [
+      'missing !examples/**/*.test.ts for recursive examples publish pattern',
+      'missing !examples/**/*.test.tsx for recursive examples publish pattern',
+      'missing !examples/**/__tests__/** for recursive examples publish pattern',
+    ],
+  },
+  {
     name: '@agent-harness/spaced-allowlist',
     path: 'lib/spaced-allowlist/package.json',
     issues: [
@@ -241,6 +294,16 @@ assert.equal(
     '  - missing !examples/**/__tests__/** for recursive examples publish pattern',
     '- ext/provider/dist-package/package.json (@agent-harness/dist-package)',
     '  - missing !dist/**/*.map for recursive dist publish pattern',
+    '- ext/provider/dist-directory-package/package.json (@agent-harness/dist-directory-package)',
+    '  - missing !dist/**/*.map for recursive dist publish pattern',
+    '- lib/source-directory/package.json (@agent-harness/source-directory)',
+    '  - missing !src/**/*.test.ts for recursive src ts publish pattern',
+    '  - missing !src/**/*.test.tsx for recursive src tsx publish pattern',
+    '  - missing !src/__tests__/** for recursive src publish pattern',
+    '- lib/example-directory/package.json (@agent-harness/example-directory)',
+    '  - missing !examples/**/*.test.ts for recursive examples publish pattern',
+    '  - missing !examples/**/*.test.tsx for recursive examples publish pattern',
+    '  - missing !examples/**/__tests__/** for recursive examples publish pattern',
     '- lib/spaced-allowlist/package.json (@agent-harness/spaced-allowlist)',
     '  - files entries must not include leading or trailing whitespace:  src/**/*.ts',
     '  - files entries must not include leading or trailing whitespace: !src/**/*.test.ts ',
