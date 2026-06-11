@@ -1,0 +1,20 @@
+slug: selenium-webdriver
+name: Selenium WebDriver and Grid
+vendor: Selenium project
+segment: browser-automation-framework
+product_path: competition/selenium-webdriver
+design_path: competition/selenium-webdriver/design
+features_path: competition/selenium-webdriver/features
+marketing_path: competition/selenium-webdriver/marketing
+gossip_path: competition/selenium-webdriver/gossip
+snapshot_date: 2026-06-11
+primary_sources:
+  - https://www.selenium.dev/documentation/
+  - https://www.selenium.dev/documentation/grid/
+secondary_sources:
+  - https://arxiv.org/abs/2207.01047
+  - https://arxiv.org/abs/2402.09745
+positioning: "Open-source browser automation umbrella with WebDriver, Grid, Selenium Manager, and IDE for cross-browser test automation."
+customer_model: "Free open-source project with ecosystem sponsorship and commercial cloud/testing partners; captures teams through standards, language bindings, and enterprise QA familiarity."
+competitive_threat_level: high
+notes: "A foundational incumbent rather than an AI-native product; it anchors buyer expectations around cross-browser support, Grid scale, and standards."
