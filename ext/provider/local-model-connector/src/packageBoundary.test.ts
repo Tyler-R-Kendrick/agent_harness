@@ -23,10 +23,22 @@ describe('local model connector package boundaries', () => {
     ) as {
       exports?: Record<string, string>;
       files?: string[];
+      license?: string;
       main?: string;
+      repository?: {
+        directory?: string;
+        type?: string;
+        url?: string;
+      };
       types?: string;
     };
 
+    expect(packageJson.license).toBe('MIT');
+    expect(packageJson.repository).toEqual({
+      type: 'git',
+      url: 'git+https://github.com/Tyler-R-Kendrick/agent_harness.git',
+      directory: 'ext/provider/local-model-connector',
+    });
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({
@@ -44,5 +56,14 @@ describe('local model connector package boundaries', () => {
       '!src/**/*.test.ts',
       '!src/__tests__/**',
     ]);
+  });
+
+  it('documents package license and source location for consumers', () => {
+    const readme = fs.readFileSync(path.join(packageRoot, 'README.md'), 'utf8');
+
+    expect(readme).toContain('License: MIT');
+    expect(readme).toContain(
+      'Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/provider/local-model-connector',
+    );
   });
 });
