@@ -141,7 +141,7 @@ test('resolvePackageBin rejects packages without a runnable bin', async () => {
 test('resolvePackageBin rejects missing package names', async () => {
   await assert.rejects(
     () => resolvePackageBin('', undefined, process.cwd()),
-    /Usage: node scripts\\/run-package-bin\\.mjs <package-name> \\[args\\.\\.\\.\\]/,
+    /Usage: node scripts\/run-package-bin\.mjs <package-name> \[args\.\.\.\]/,
   );
 });
 
