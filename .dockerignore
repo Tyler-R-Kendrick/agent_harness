@@ -59,6 +59,13 @@ output/
 *.tsbuildinfo
 *.log
 report.*.json
+core
+!core/
+!**/core/
+!**/core/**
+core.[0-9]*
+*.dmp
+*.mdmp
 .vite/
 **/.vite/
 .vitest/
