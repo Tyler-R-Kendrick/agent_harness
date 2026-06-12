@@ -1,0 +1,19 @@
+slug: fazm
+name: Fazm
+vendor: Mediar AI
+segment: local-desktop-computer-agent
+product_path: competition/fazm
+design_path: competition/fazm/design
+features_path: competition/fazm/features
+marketing_path: competition/fazm/marketing
+gossip_path: competition/fazm/gossip
+snapshot_date: 2026-06-12
+primary_sources:
+  - https://github.com/mediar-ai/fazm
+  - https://fazm.ai/enterprise
+secondary_sources:
+  - https://www.reddit.com/r/SideProject/comments/1rqcn4y/fazm_open_source_voicecontrolled_ai_agent_for/
+positioning: "Local-first macOS AI computer agent that controls browser, apps, documents, Google Apps, and code workflows from voice or shared team workflows."
+customer_model: "Open-source desktop app with free start, enterprise team workflow library, admin controls, audit trails, SSO, role-based access, and on-prem deployment."
+competitive_threat_level: medium
+notes: "Expands the frame from browser control to full-desktop operations, but macOS/accessibility requirements, voice latency, and broad device authority create trust and reliability challenges."
