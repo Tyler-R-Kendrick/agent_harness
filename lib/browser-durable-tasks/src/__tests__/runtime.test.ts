@@ -170,6 +170,58 @@ describe('durable browser task runtime', () => {
     });
   });
 
+  it('keeps running tasks cancelled when handlers settle after cancellation', async () => {
+    const now = Date.parse('2026-05-09T14:15:00.000Z');
+    const runtime = createDurableTaskRuntime({
+      store: createMemoryDurableTaskStore(),
+      lockOwner: 'tab-cancel-race',
+      now: () => now,
+    });
+    runtime.defineTask({
+      type: 'cancel-before-success',
+      run: async ({ task }) => {
+        await runtime.cancel(task.id, 'worker-stop');
+        return 'late output';
+      },
+    });
+    runtime.defineTask({
+      type: 'cancel-before-failure',
+      maxAttempts: 2,
+      run: async ({ task }) => {
+        await runtime.cancel(task.id, 'worker-stop');
+        throw new Error('late failure');
+      },
+    });
+
+    const cancelledBeforeSuccess = await runtime.enqueue('cancel-before-success', {});
+    const cancelledBeforeFailure = await runtime.enqueue('cancel-before-failure', {});
+
+    expect(await runtime.tick()).toEqual([
+      expect.objectContaining({ id: cancelledBeforeSuccess.id, status: 'cancelled' }),
+      expect.objectContaining({ id: cancelledBeforeFailure.id, status: 'cancelled' }),
+    ]);
+    expect(await runtime.getTask(cancelledBeforeSuccess.id)).toMatchObject({
+      status: 'cancelled',
+      output: null,
+      error: null,
+      cancelledAt: now,
+      lockOwner: null,
+      lockedUntil: null,
+      metadata: { cancelledBy: 'worker-stop' },
+    });
+    expect(await runtime.getTask(cancelledBeforeFailure.id)).toMatchObject({
+      status: 'cancelled',
+      output: null,
+      error: null,
+      attemptCount: 1,
+      scheduledFor: now,
+      cancelledAt: now,
+      lockOwner: null,
+      lockedUntil: null,
+      metadata: { cancelledBy: 'worker-stop' },
+    });
+  });
+
   it('rejects runtime operations that would reopen terminal task states', async () => {
     const now = Date.parse('2026-05-09T14:30:00.000Z');
     const runtime = createDurableTaskRuntime({
