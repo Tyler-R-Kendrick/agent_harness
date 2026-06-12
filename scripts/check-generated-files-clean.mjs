@@ -53,6 +53,22 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => /(?:^|\/)report\.[^/]+\.json$/u.test(filePath),
   },
   {
+    label: 'core',
+    matches: (filePath) => filePath === 'core' || filePath.endsWith('/core'),
+  },
+  {
+    label: 'core.[0-9]*',
+    matches: (filePath) => /(?:^|\/)core\.[0-9][^/]*$/u.test(filePath),
+  },
+  {
+    label: '*.dmp',
+    matches: (filePath) => filePath.endsWith('.dmp'),
+  },
+  {
+    label: '*.mdmp',
+    matches: (filePath) => filePath.endsWith('.mdmp'),
+  },
+  {
     label: '*.tmp',
     matches: (filePath) => filePath.endsWith('.tmp'),
   },
