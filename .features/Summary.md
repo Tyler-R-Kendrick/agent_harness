@@ -1,6 +1,6 @@
 # Agent Harness Competition Summary
 
-Updated: 2026-06-11
+Updated: 2026-06-12
 Scope: `ChatGPT`, `Claude Code`, `Claude Cowork`, `Claude in Chrome`, `Cline`, `Codex`, `Conductor`, `Cursor`, `DeepSeek`, `DeerFlow`, `Devin`, `Gemini CLI`, `GitHub Copilot`, `Goose`, `Hermes Agent`, `Kilo Code`, `Kimi AI`, `Mastra`, `n8n`, `OpenAI Symphony`, `OpenClaw`, `OpenCode`, `Open Design`, `OpenHands`, `Pi`, `Roomote`, `Roo Code`, `Space Agent`, `T3 Code`, `Warp`
 Method: current-product research from first-party product pages, help centers, docs, release notes, changelogs, and official project properties where available.
 
@@ -236,3 +236,10 @@ Method: current-product research from first-party product pages, help centers, d
 - Why it matters: once teams depend on packaged agent extensions, they need to know exactly what was installed, whether it matches the current runtime, and when it has drifted away from a managed source of truth.
 - One-shot build instruction:
   - Add a managed package registry flow to `agent-browser` for skills and plugins that validates runtime compatibility before install, prefers exact published artifacts over opportunistic package resolution, records source and digest metadata for every install, supports dry-run publish plans for package authors, and surfaces managed-version drift warnings plus guided update or rollback actions in the operator UI.
+
+### 34. Authenticated app-server protocols for detachable rich clients
+- Common pattern: some harnesses are exposing the internal runtime protocol that powers their first-party clients so terminals, IDEs, embedded products, and remote operators can attach to the same live agent state instead of rehosting isolated copies.
+- Seen in: Codex app-server with JSON-RPC thread and turn primitives, remote TUI attachment, approval messages, capability-token or signed-bearer-token WebSocket auth, generated TypeScript or JSON schemas, and explicit experimental capability negotiation.
+- Why it matters: once a harness supports multiple operator surfaces, the cleanest scaling path is a shared runtime contract rather than duplicating orchestration, approvals, and event streaming logic in every client.
+- One-shot build instruction:
+  - Add an authenticated app-server protocol to `agent-browser` that exposes threads, turns, steering, approvals, tool events, and artifact updates over a stable transport contract; support local and remote clients over stdio or sockets, issue version-matched schemas for integrators, require explicit auth for remote transport, and gate experimental fields behind declared client capabilities so browser, IDE, terminal, and embedded-product clients can all attach to the same runtime without forking the agent core.

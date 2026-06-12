@@ -1,35 +1,34 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-11
-Baseline: `.features/Summary.md` refreshed through the 2026-06-09 GitHub Copilot corpus.
-Diff type: additive updates after the 2026-06-11 OpenClaw refresh
+Updated: 2026-06-12
+Baseline: `.features/Summary.md` refreshed through the 2026-06-11 OpenClaw corpus.
+Diff type: additive updates after the 2026-06-12 Codex refresh
 
 ## Net new normalized features
 
-### Added: Registry-verified plugin package artifacts with compatibility gates and drift alerts
-- Why now: the refreshed OpenClaw corpus now shows a stronger first-party package lifecycle than the earlier OpenClaw slice captured. ClawHub is no longer just a place to browse skills and scan results; it now acts as a managed registry for code plugins and bundle plugins with exact artifact verification and managed update signaling.
+### Added: Authenticated app-server protocols for detachable rich clients
+- Why now: the refreshed Codex corpus now documents Codex's app-server as a first-party integration surface rather than just an implementation detail behind the app and IDE. That makes the client/runtime split explicit and productized.
 - Research delta:
-  - current ClawHub docs now describe code-plugin and bundle-plugin hosting, native `openclaw plugins install clawhub:<package>` and `openclaw plugins update --all` flows, and package publishing with `clawhub package publish <source>`
-  - package installs validate advertised `pluginApi` and `minGatewayVersion` metadata before archive install starts, which turns compatibility into an explicit install gate instead of a runtime surprise
-  - when a version publishes a ClawPack artifact, OpenClaw prefers the exact uploaded `.tgz`, verifies both the digest header and downloaded bytes, and records artifact metadata for later updates
-  - the same docs expose `--dry-run` publish plans, which lets plugin publishers inspect the exact package release plan before upload
-  - the `2026.6.6` OpenClaw changelog adds managed plugin version-drift reporting, dry runs that can skip publish approval, and trusted-hook install declarations, pushing package lifecycle governance further into the harness core
+  - current Codex docs describe `codex app-server` as the interface used to power rich clients such as the Codex VS Code extension, with JSON-RPC thread, turn, steering, and approval flows
+  - the CLI can attach to another machine's live runtime with `codex --remote ...`, which turns the terminal UI into a detachable client instead of the only place where the runtime can live
+  - remote app-server use documents capability-token and signed-bearer-token auth, health probes, bounded-queue overload behavior, and retry expectations, which shows a more mature remote-client contract than a best-effort local socket
+  - schema-generation commands for TypeScript and JSON Schema let integrators pin the contract to a specific Codex version
+  - experimental fields and methods are gated through initialize-time client capabilities, which gives Codex a versioning and compatibility story for richer clients
 
 ## Expanded normalized features
 
-### Expanded: Skills, plugins, and reusable workflow packaging
-- Why now: the OpenClaw refresh shows that reusable workflow packaging is maturing from installable prompt bundles into a registry-managed package lane with exact artifacts, compatibility gates, and package-health follow-through after install.
+### Expanded: Multi-surface continuity
+- Why now: the Codex refresh sharpens continuity from "same thread across app, CLI, IDE, cloud, and phone" into "same runtime contract can be driven by multiple detachable clients."
 - Research delta:
-  - OpenClaw now treats plugin packages as first-class registry objects rather than leaving them in a side-channel package-manager flow
-  - compatibility metadata and artifact digest verification are now part of the install contract, not just publisher conventions
-  - managed version drift is surfaced by the harness itself, which extends packaging from “install once” into “keep package state governed over time”
+  - the operator surface is not just portable at the UX layer; the runtime itself is now exposed as a reusable client protocol
+  - this reduces the need for each new client to embed private orchestration and approval logic, which lowers the barrier to adding future surfaces
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add registry-verified plugin package artifacts with compatibility gates and drift alerts
+### Proposed Linear feature: Add an authenticated app-server protocol for detachable agent-browser clients
 - Linear issue title:
-  - `Add registry-verified plugin package artifacts with compatibility gates and drift alerts`
+  - `Add an authenticated app-server protocol for detachable agent-browser clients`
 - Suggested problem statement:
-  - `agent-browser` already has skills, plugins, and external tool surfaces, but it still lacks a governed package lifecycle for those extensions. Competitors are moving beyond simple marketplace install buttons: OpenClaw now validates plugin compatibility before install, prefers exact published package artifacts instead of best-effort package resolution, records artifact metadata for later updates, offers dry-run publish planning, and warns when managed plugin versions drift from the expected registry state. Without a comparable package contract, `agent-browser` cannot guarantee what extension artifact was actually installed, cannot reliably block incompatible upgrades, and cannot give operators a durable view of managed extension drift. The product needs a registry-backed package lane that treats plugin and skill artifacts as governed runtime assets rather than anonymous package-manager installs.`
+  - `agent-browser` currently treats its UI surfaces as tightly coupled to the runtime that executes agent turns. Competitors are starting to separate those layers. Codex now exposes a first-party app-server protocol that powers rich clients like the IDE extension, lets a remote terminal attach to the same live runtime, carries approvals and steering as protocol messages, supports explicit remote authentication, and publishes version-matched schemas for integrators. Without a comparable protocol, `agent-browser` has to re-embed orchestration, approvals, and event-stream handling in each surface we build, which makes new clients harder to ship and remote supervision harder to standardize. The product needs a stable runtime contract that lets browser, IDE, terminal, and embedded clients attach to one live agent session with explicit authentication and compatibility boundaries.`
 - One-shot instruction for an LLM:
-  - Implement a managed extension-package registry flow for `agent-browser`: support registry-hosted skill, plugin, or bundle packages with explicit compatibility metadata such as minimum runtime API and minimum app version; validate that metadata before install; prefer exact published artifacts over opportunistic package resolution; record source, version, digest, and artifact metadata for every installed package; add dry-run publish planning for package authors; and surface managed-version drift warnings plus guided update, pin, or rollback actions in the operator UI so extension lifecycle stays inspectable after install.
+  - Implement an authenticated app-server protocol for `agent-browser` that exposes threads, turns, in-flight steering, approvals, tool events, file or artifact updates, and status notifications over a stable transport contract; support local transports first and authenticated remote attachment second; let thin clients such as a browser console, IDE panel, or terminal attach to the same runtime session; generate version-matched TypeScript and JSON Schema artifacts for integrators; and gate experimental methods or fields behind declared client capabilities so the runtime can evolve without breaking stable detachable clients.
