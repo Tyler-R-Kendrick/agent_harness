@@ -1,0 +1,19 @@
+slug: browser-operator
+name: Browser Operator
+vendor: BrowserOperator
+segment: open-source-ai-browser
+product_path: competition/browser-operator
+design_path: competition/browser-operator/design
+features_path: competition/browser-operator/features
+marketing_path: competition/browser-operator/marketing
+gossip_path: competition/browser-operator/gossip
+snapshot_date: 2026-06-12
+primary_sources:
+  - https://github.com/BrowserOperator/browser-operator-core
+  - https://docs.browseroperator.io/getting-started/
+secondary_sources:
+  - https://github.com/BrowserOperator/browser-operator-core/issues
+positioning: "Open-source, privacy-focused AI browser with local Chromium execution, multiple agent modes, and broad LLM-provider choice."
+customer_model: "Free open-source desktop app for macOS and Windows users who want a local alternative to ChatGPT Atlas, Perplexity Comet, Dia, and Edge Copilot Mode."
+competitive_threat_level: medium
+notes: "Strong local-browser positioning and provider flexibility, but public issue backlog highlights security, MCP, local model, Linux, and context-routing gaps."
