@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # SkillOpt (arXiv:2605.23904)
 
 - Paper: **SkillOpt: Executive Strategy for Self-Evolving Agent Skills**

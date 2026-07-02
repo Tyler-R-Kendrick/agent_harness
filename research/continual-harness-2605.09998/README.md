@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Continual Harness (arXiv:2605.09998)
 
 - Paper: **Continual Harness: Online Adaptation for Self-Improving Foundation Agents**

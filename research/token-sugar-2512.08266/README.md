@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Token Sugar (arXiv:2512.08266)
 
 - Paper: **Token Sugar: Making Code Sweeter for LLMs**

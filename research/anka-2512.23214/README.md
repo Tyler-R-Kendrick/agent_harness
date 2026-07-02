@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Anka (arXiv:2512.23214)
 
 - Paper: **Anka: A Programming Language Designed for LLM Reliability**

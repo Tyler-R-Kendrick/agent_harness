@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Agent Lightning (arXiv:2508.03680)
 
 - Paper: **Agent Lightning: Train ANY AI Agents with Reinforcement Learning** — Luo et al., Microsoft Research

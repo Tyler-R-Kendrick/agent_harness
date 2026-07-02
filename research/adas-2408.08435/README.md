@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # ADAS (arXiv:2408.08435)
 
 - Paper: **Automated Design of Agentic Systems**

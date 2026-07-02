@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Production Agent Evaluation Harness (12-Metric Framework)
 
 - Paper/article: **Building an Evaluation Harness for Production AI Agents: A 12-Metric Framework From 100+ Deployments**

@@ -5,6 +5,14 @@ export interface SandboxFeatureFlags {
   secureBrowserSandboxExec: boolean;
   disableWebContainerAdapter: boolean;
   allowSameOriginForWebContainer: boolean;
+  /**
+   * Phase 0 shadow flag for the external MCP client. Default off: when off the
+   * MCP client is never constructed. When on, discovered tools are logged only
+   * and NOT merged into the active tool set (zero behavior change to chat).
+   * Optional so pre-existing flag literals remain valid; the resolver always
+   * populates it.
+   */
+  mcpClientEnabled?: boolean;
 }
 
 type FlagEnvironment = Record<string, unknown>;
@@ -63,6 +71,7 @@ export function getSandboxFeatureFlags(
     secureBrowserSandboxExec: parseBooleanFlag(resolvedEnvironment.VITE_SECURE_BROWSER_SANDBOX_EXEC),
     disableWebContainerAdapter: parseBooleanFlag(resolvedEnvironment.VITE_DISABLE_WEBCONTAINER_SANDBOX_ADAPTER),
     allowSameOriginForWebContainer: parseBooleanFlag(resolvedEnvironment.VITE_ALLOW_SANDBOX_SAME_ORIGIN),
+    mcpClientEnabled: parseBooleanFlag(resolvedEnvironment.VITE_MCP_CLIENT),
   };
 }
 

@@ -68,6 +68,16 @@ client (`docs/adr/2026-07-02-protocol-adoption-mcp-a2a.md`) reads peers'
 auth.md files during connection setup. Secrets stay in the host secret
 store (`harness-core/src/secrets.ts`).
 
+> **Phase 0 status — deferred (blocked).** There is currently no hosted auth
+> surface to describe: `vercel.json` deploys `agent-browser` as a static SPA,
+> and the repo exposes no login, no registerable service, and no hosted
+> MCP/A2A **server** endpoint (the MCP work is an in-browser/client runtime).
+> `harness-core/src/secrets.ts` is a redaction/vaulting layer, not an
+> identity provider. Serving a server-side `/auth.md` would be misleading, so
+> its creation is deferred until a hosted MCP/A2A server surface exists. The
+> near-term realization is the **client** side — reading peers' `auth.md`
+> during connection setup — tracked under the MCP/A2A ADR, not this checklist.
+
 ### Open Knowledge Format — Google standard (real, adopted)
 
 OKF (GoogleCloudPlatform/knowledge-catalog): markdown + YAML frontmatter
@@ -104,11 +114,16 @@ MCP (agent↔tool) and A2A (agent↔agent), both under the Linux Foundation
 Agentic AI Foundation. ACP is retired — merged into A2A in August 2025.
 Details: `docs/adr/2026-07-02-protocol-adoption-mcp-a2a.md`.
 
-## Phase 0 creation checklist (follow-up work, not this change set)
+## Phase 0 creation checklist
 
-1. `SCAFFOLD.md` — generated from the package index, then hand-annotated.
-2. `MEMORY.md` — seeded empty with section headers and lifecycle rules.
-3. `STEERING.md` — seeded from AGENTS.md's reasoning-strategy content.
-4. `auth.md` — for hosted deployments (vercel.json surface).
-5. OKF frontmatter on new knowledge artifacts.
-6. AGENTS.md slimmed to operating rules; links to the new files.
+1. `SCAFFOLD.md` — ✅ created; semantic map derived from the package index,
+   kept in sync by `scripts/check-scaffold-in-sync.mjs` (in `test:root-scripts`).
+2. `MEMORY.md` — ✅ created; seeded with durable terminology, conventions, and
+   environment facts + lifecycle rules.
+3. `STEERING.md` — ✅ created; numbered reasoning-strategy rules extracted from
+   AGENTS.md, mapped to runtime `.steering` scopes.
+4. `auth.md` — ⏸ deferred (no hosted auth surface — see the auth.md section
+   above).
+5. OKF frontmatter — ✅ applied to research packet READMEs (`type` field).
+6. AGENTS.md — ✅ slimmed to operating rules; `lib/` conventions moved to
+   SCAFFOLD.md, scaffolding strategy to STEERING.md; links to the new files.

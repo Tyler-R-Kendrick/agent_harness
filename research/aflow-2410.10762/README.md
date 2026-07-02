@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # AFlow (arXiv:2410.10762)
 
 > **Disambiguation:** this packet covers **AFlow** (arXiv:2410.10762, Oct 2024), which is a *different paper* from the existing packet `research/aaflow-2605.02162` (**AAFLOW: Scalable Patterns for Agentic AI Workflows**, arXiv:2605.02162). AAFLOW is a distributed *execution runtime* (operator dataflow, zero-copy batching); AFlow is a *search procedure* that automatically discovers workflow structure. Read `research/aaflow-2605.02162/README.md` first if you are unsure which packet you need.

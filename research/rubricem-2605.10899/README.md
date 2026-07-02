@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # RubricEM (arXiv:2605.10899)
 
 - Paper: **RubricEM: Meta-RL with Rubric-guided Policy Decomposition beyond Verifiable Rewards**

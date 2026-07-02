@@ -210,8 +210,10 @@ export {
   HARNESS_OTEL_TRACER_NAME,
   HARNESS_OTEL_TRACER_VERSION,
   setHarnessTelemetryAttributes,
+  setHarnessTelemetryReward,
   toHarnessTelemetryError,
   withHarnessTelemetrySpan,
+  type HarnessTelemetryReward,
   type HarnessTelemetrySpanOptions,
 } from './telemetry.js';
 export {
