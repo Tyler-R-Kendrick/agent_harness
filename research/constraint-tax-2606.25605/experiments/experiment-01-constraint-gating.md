@@ -9,7 +9,7 @@ A decoding-mode state machine driven by a (task kind × output kind) policy tabl
 - Implementation: `experiment-01-constraint-gating.ts`
 - Scripted sequence: reason → select tool → emit DSL → reason → emit DSL (fixed events).
 - Policy: only (`dsl-emission`, `dsl-block`) maps to `constrained`; everything else is `free`.
-- Validation command: `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/constraint-tax-2606.25605/experiments/experiment-01-constraint-gating.ts`
+- Validation command: (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/constraint-tax-2606.25605/experiments/experiment-01-constraint-gating.ts`
 
 ## Procedure
 

@@ -22,7 +22,7 @@ An MCTS-lite loop over typed graph edits (add operator, swap kind, rewire edge) 
 ## Acceptance criteria
 
 - Scaffold typechecks clean with:
-  `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/aflow-2410.10762/experiments/experiment-01-operator-graph-search.ts`
+  (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/aflow-2410.10762/experiments/experiment-01-operator-graph-search.ts`
 - All graph edits are typed union members; no stringly-typed mutations.
 - Best graph score strictly exceeds the seed graph score in the demo run.
 - Identical seed produces an identical search trace.

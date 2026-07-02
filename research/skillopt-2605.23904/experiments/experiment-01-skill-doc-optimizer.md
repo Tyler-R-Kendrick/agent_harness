@@ -22,7 +22,7 @@ A bounded-edit, validation-gated optimization loop over a typed SKILL.md documen
 ## Acceptance criteria
 
 - Scaffold compiles clean with:
-  `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/skillopt-2605.23904/experiments/experiment-01-skill-doc-optimizer.ts`
+  (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/skillopt-2605.23904/experiments/experiment-01-skill-doc-optimizer.ts`
 - Demo run is deterministic and shows both accepted and rejected edits.
 - Best score never decreases across iterations (acceptance gate is strict).
 - At least one proposal is skipped via the rejected-edit memory.

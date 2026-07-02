@@ -50,16 +50,18 @@ export const EVAL_INSTANCES: readonly EvalInstance[] = [
   { id: 'i4', requiredTerms: ['concise'], maxLength: 140 },
 ];
 
+export const MAX_FRONTIER = 6;
+
 export function scoreInstance(text: string, instance: EvalInstance): number {
+  // Hard length gate: over-budget text scores zero on this instance.
+  if (text.length > instance.maxLength) return 0;
   const lower = text.toLowerCase();
   let hits = 0;
   for (const term of instance.requiredTerms) {
     if (lower.indexOf(term) >= 0) hits += 1;
   }
   const coverage = hits / instance.requiredTerms.length;
-  const overflow = Math.max(0, text.length - instance.maxLength);
-  const penalty = Math.min(0.5, overflow * 0.005);
-  return Math.max(0, Math.round((coverage - penalty) * 1000) / 1000);
+  return Math.round(coverage * 1000) / 1000;
 }
 
 export function evaluate(text: string, instances: readonly EvalInstance[]): readonly number[] {
@@ -81,7 +83,15 @@ export function updateFrontier(frontier: readonly Candidate[], child: Candidate)
       return frontier;
     }
   }
-  return frontier.filter((member) => !dominates(child.scores, member.scores)).concat([child]);
+  const next = frontier.filter((member) => !dominates(child.scores, member.scores)).concat([child]);
+  if (next.length <= MAX_FRONTIER) return next;
+  // Cap the frontier: keep the best MAX_FRONTIER members by mean score (deterministic tie-break by id).
+  const mean = (scores: readonly number[]): number =>
+    scores.reduce((sum, value) => sum + value, 0) / scores.length;
+  return next
+    .slice()
+    .sort((a, b) => mean(b.scores) - mean(a.scores) || (a.id < b.id ? -1 : 1))
+    .slice(0, MAX_FRONTIER);
 }
 
 export function reflectAndMutate(

@@ -109,6 +109,33 @@ export function applyEdit(graph: WorkflowGraph, edit: GraphEdit): WorkflowGraph 
   return exists ? graph : { operators: graph.operators, edges: graph.edges.concat([edit]) };
 }
 
+export function isAcyclic(graph: WorkflowGraph): boolean {
+  // Kahn-style topological check: repeatedly remove operators with no incoming edges.
+  const remaining = new Set(graph.operators.map((op) => op.id));
+  let removed = true;
+  while (removed && remaining.size > 0) {
+    removed = false;
+    for (const id of Array.from(remaining)) {
+      const hasIncoming = graph.edges.some((e) => e.to === id && remaining.has(e.from));
+      if (!hasIncoming) {
+        remaining.delete(id);
+        removed = true;
+      }
+    }
+  }
+  return remaining.size === 0;
+}
+
+export function isValidGraph(graph: WorkflowGraph): boolean {
+  const ids = new Set(graph.operators.map((op) => op.id));
+  // Contract: unique operator ids, every edge endpoint resolves, no self-loops, and the graph is acyclic.
+  if (ids.size !== graph.operators.length) return false;
+  for (const edge of graph.edges) {
+    if (!ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to) return false;
+  }
+  return isAcyclic(graph);
+}
+
 interface SearchNode {
   readonly graph: WorkflowGraph;
   readonly parent: SearchNode | null;
@@ -136,7 +163,10 @@ export function runOperatorGraphSearch(iterations = 40, seed = 42, exploration =
     }
     const edit = proposeEdit(node.graph, prng, nextId);
     if (edit.type === 'add-operator') nextId += 1;
-    const child: SearchNode = { graph: applyEdit(node.graph, edit), parent: node, children: [], visits: 0, totalScore: 0 };
+    const childGraph = applyEdit(node.graph, edit);
+    // Skip invalid children (cyclic or contract-violating graphs) before any scoring or accounting.
+    if (!isValidGraph(childGraph)) continue;
+    const child: SearchNode = { graph: childGraph, parent: node, children: [], visits: 0, totalScore: 0 };
     node.children.push(child);
     const score = mockEvaluate(child.graph);
     for (let walker: SearchNode | null = child; walker !== null; walker = walker.parent) {

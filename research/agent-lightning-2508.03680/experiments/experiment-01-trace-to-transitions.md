@@ -19,7 +19,7 @@ An OTel-style span log with explicit reward slots can be deterministically conve
 4. Assert transition count, monotonic ordering, terminal `done` flag, and reward placement.
 5. Print the transition table.
 6. Validate with:
-   `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/agent-lightning-2508.03680/experiments/experiment-01-trace-to-transitions.ts`
+   (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/agent-lightning-2508.03680/experiments/experiment-01-trace-to-transitions.ts`
 
 ## Acceptance criteria
 

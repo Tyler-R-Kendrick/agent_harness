@@ -23,7 +23,7 @@ Selecting the lineage to self-modify by Clade-Metaproductivity (CMP) diverges fr
 ## Acceptance criteria
 
 - Scaffold compiles clean with:
-  `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/hgm-2510.21614/experiments/experiment-01-clade-metaproductivity.ts`
+  (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/hgm-2510.21614/experiments/experiment-01-clade-metaproductivity.ts`
 - Demo run is deterministic and shows `selectionDiverges: true` (own-score argmax ≠ CMP argmax).
 - No variant becomes the active harness without passing through the `benchmarked` state.
 - Promotion log contains both promoted and rejected transitions.

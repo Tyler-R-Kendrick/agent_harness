@@ -23,7 +23,7 @@ Reflection-targeted text mutations plus Pareto-frontier selection over per-insta
 ## Acceptance criteria
 
 - Scaffold typechecks clean with:
-  `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/gepa-2507.19457/experiments/experiment-01-pareto-text-evolution.ts`
+  (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/gepa-2507.19457/experiments/experiment-01-pareto-text-evolution.ts`
 - Dominance and frontier updates are explicit, typed functions.
 - Final selected candidate's mean score strictly exceeds the seed candidate's.
 - Identical seed reproduces the frontier-growth series exactly.

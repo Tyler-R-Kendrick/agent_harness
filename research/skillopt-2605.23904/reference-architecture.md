@@ -49,5 +49,5 @@ Optimize SKILL.md documents as trainable artifacts of a frozen agent runtime, wi
 - Held-out validation score of `bestDoc` vs iteration count.
 - Acceptance rate and rejected-edit memory size.
 - Proposal-skip rate attributable to rejected-edit memory (wasted-eval savings).
-- Document length trajectory (must stay within the 300-2,000-token band).
+- Document length trajectory (must stay within the caps: 240 characters per section, 1,600 characters per document).
 - Regression count on the fixture task set after each accepted edit.

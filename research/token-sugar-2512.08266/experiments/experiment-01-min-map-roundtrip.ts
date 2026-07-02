@@ -38,12 +38,39 @@ export function canonicalize(source: string): string {
   return tokens.join(' ');
 }
 
+// Quote-aware tokenizer: a double-quoted payload stays atomic (a single token),
+// so quoted strings are never split word-by-word during minification.
+export function tokenize(text: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (const char of text) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (char === ' ' && !inQuotes) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
 function isEligible(token: string): boolean {
   return token.length >= MIN_LONG_FORM_LENGTH && token[0] !== '"';
 }
 
 export function minify(sourceName: string, source: string): MinifiedDocument {
-  const canonicalTokens = canonicalize(source).split(' ');
+  const canonicalTokens = tokenize(canonicalize(source));
   const table: MinMapEntry[] = [];
   const idByLongForm = new Map<string, number>();
   const positions: number[] = [];
@@ -79,7 +106,7 @@ export function expand(document: MinifiedDocument): string {
     throw new Error(`unsupported .min.map version for ${document.mapName}`);
   }
 
-  const minTokens = document.min.split(' ');
+  const minTokens = tokenize(document.min);
   if (minTokens.length !== document.map.positions.length) {
     throw new Error(`positional mapping does not cover ${document.minName}`);
   }

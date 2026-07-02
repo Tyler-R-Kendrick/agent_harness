@@ -68,7 +68,7 @@ export function applyOutcome(
   if (!success && consecutiveFailures >= thresholds.deprecateAfterConsecutiveFailures) {
     toState = 'deprecated';
     reason = 'repeated failure';
-  } else if (tick - entry.lastUsedTick > thresholds.staleAfterTicks) {
+  } else if (!success && tick - entry.lastUsedTick > thresholds.staleAfterTicks) {
     toState = 'deprecated';
     reason = 'staleness';
   } else if (success && entry.state === 'candidate' && successCount >= thresholds.promoteAfterSuccesses) {

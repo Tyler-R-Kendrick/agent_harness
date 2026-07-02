@@ -39,7 +39,8 @@ stage enabled by the reward-slotted traces — never the first lever.
    lineage and eval scores; no variant is promoted automatically.
 2. **Phase 1 (opt-in):** eval-gated promotion for skills and steering rules;
    human review remains in the loop for harness-definition changes.
-3. **Phase 2 (core-default):** continuous improvement loop under CMP gating;
+3. **Phase 2 (core-default):** continuous improvement loop under
+   clade-metaproductivity (CMP) gating;
    RL stage may activate on the accumulated reward-slotted traces.
 
 ## Migration notes

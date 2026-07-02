@@ -103,7 +103,8 @@ export function proposeEdit(
 ): { proposal: EditProposal; skipped: number } {
   const rejectedKeys = new Set(rejected.map((r) => r.key));
   let skipped = 0;
-  for (;;) {
+  const maxAttempts = 1000;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     const kind: EditKind = rng.nextInt(2) === 0 ? 'replace' : 'append';
     const sectionIndex = kind === 'replace' ? rng.nextInt(doc.sections.length) : doc.sections.length;
     const body = CANDIDATE_BODIES[rng.nextInt(CANDIDATE_BODIES.length)];
@@ -113,6 +114,9 @@ export function proposeEdit(
     }
     skipped += 1;
   }
+  throw new Error(
+    `proposeEdit exhausted ${maxAttempts} attempts: all sampled proposals are in rejected-edit memory`,
+  );
 }
 
 export function optimizeSkillDoc(

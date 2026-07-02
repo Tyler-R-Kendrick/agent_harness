@@ -105,6 +105,8 @@ export function mockBenchmark(latentQuality: number, rng: SeededLcg): number {
   return Math.min(1, Math.max(0, score));
 }
 
+// Advances a promotion record one stage per call: candidate -> benchmarked on the
+// first call, then benchmarked -> promoted/rejected (vs the incumbent + margin) on the second.
 export function stepPromotion(
   record: PromotionRecord,
   incumbentScore: number,
@@ -141,6 +143,8 @@ export function runExpansionLoop(seed: number, rounds: number): ExpansionReport 
     tree.add({ id: childId, parentId: parent.id, ownScore: childScore, evalCount: 4 });
 
     let record: PromotionRecord = { variantId: childId, state: 'candidate', benchmarkScore: childScore };
+    // Two-stage transition: the first step moves candidate -> benchmarked,
+    // the second compares against the incumbent and moves benchmarked -> promoted/rejected.
     record = stepPromotion(record, tree.get(activeHarnessId).ownScore, 0.02);
     record = stepPromotion(record, tree.get(activeHarnessId).ownScore, 0.02);
     promotions.push(record);

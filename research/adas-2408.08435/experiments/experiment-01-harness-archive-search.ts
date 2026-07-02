@@ -35,6 +35,10 @@ export class SeededPrng {
   }
 }
 
+export function canonicalizeDefinition(definition: string): string {
+  return definition.trim().replace(/\s+/g, ' ');
+}
+
 export function hashString(input: string): string {
   let hash = 5381;
   for (let i = 0; i < input.length; i += 1) {
@@ -153,7 +157,7 @@ export function runArchiveSearch(iterations = 30, seed = 11): SearchReport {
   const archive = new Archive();
   const seedDefinition = 'Baseline harness: read task, act, return answer.';
   archive.insert({
-    id: hashString(seedDefinition),
+    id: hashString(canonicalizeDefinition(seedDefinition)),
     parentId: null,
     summary: 'baseline',
     definition: seedDefinition,
@@ -165,7 +169,7 @@ export function runArchiveSearch(iterations = 30, seed = 11): SearchReport {
     const parent = sampleParent(archive, prng);
     const proposal = mutate(parent, prng);
     const child: HarnessGenome = {
-      id: hashString(proposal.definition),
+      id: hashString(canonicalizeDefinition(proposal.definition)),
       parentId: parent.id,
       summary: proposal.summary,
       definition: proposal.definition,

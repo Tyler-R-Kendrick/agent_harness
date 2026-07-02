@@ -23,7 +23,7 @@ An append-only, content-addressed archive with score+novelty-weighted parent sam
 ## Acceptance criteria
 
 - Scaffold typechecks clean with:
-  `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/adas-2408.08435/experiments/experiment-01-harness-archive-search.ts`
+  (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/adas-2408.08435/experiments/experiment-01-harness-archive-search.ts`
 - Archive insert is append-only and dedupes on content hash.
 - Best genome's combined score strictly exceeds the seed genome's.
 - Lineage report walks from best genome back to the seed via parentId.

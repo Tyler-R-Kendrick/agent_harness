@@ -9,7 +9,7 @@ A single canonical definition of the intent-DSL can drive both a recursive-desce
 - Implementation: `experiment-01-canonical-intent-grammar.ts`
 - Statement kinds: `discover-harness`, `use-dsl`, `emit`, `verify`.
 - Fixtures: 2 intent programs (1 valid, 1 invalid), fixed strings, no randomness.
-- Validation command: `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/anka-2512.23214/experiments/experiment-01-canonical-intent-grammar.ts`
+- Validation command: (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/anka-2512.23214/experiments/experiment-01-canonical-intent-grammar.ts`
 
 ## Procedure
 

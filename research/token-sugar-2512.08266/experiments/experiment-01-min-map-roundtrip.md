@@ -9,7 +9,7 @@ A deterministic minifier with a `.min.map` sidecar (token table + positional map
 - Implementation: `experiment-01-min-map-roundtrip.ts`
 - Fixtures: 3 intent programs written in the canonical form from `research/anka-2512.23214`.
 - All inputs are fixed strings; short-form assignment is first-appearance order.
-- Validation command: `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/token-sugar-2512.08266/experiments/experiment-01-min-map-roundtrip.ts`
+- Validation command: (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/token-sugar-2512.08266/experiments/experiment-01-min-map-roundtrip.ts`
 
 ## Procedure
 

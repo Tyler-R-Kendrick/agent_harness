@@ -19,7 +19,7 @@ A deterministic memory-entry state machine (candidate → active → deprecated)
 4. Distill a fresh candidate from the post-change successful trajectory and confirm retrieval switches to it.
 5. Print the final memory-store report and assert every expected transition.
 6. Validate with:
-   `cd /home/user/agent_harness && npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/memp-2508.06433/experiments/experiment-01-procedural-memory-lifecycle.ts`
+   (from the repo root) `npx tsc --noEmit --target es2015 --skipLibCheck --moduleResolution nodenext --module nodenext research/memp-2508.06433/experiments/experiment-01-procedural-memory-lifecycle.ts`
 
 ## Acceptance criteria
 
