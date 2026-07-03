@@ -9,7 +9,6 @@ on:
       - ext/worker/local-inference-worker/**
       - scripts/package-extension-downloads.mjs
       - package.json
-      - package-lock.json
   pull_request:
     paths:
       - .github/workflows/daemon-build.yml
@@ -17,7 +16,6 @@ on:
       - ext/worker/local-inference-worker/**
       - scripts/package-extension-downloads.mjs
       - package.json
-      - package-lock.json
 
 jobs:
   windows-daemon:

@@ -1,6 +1,10 @@
 {
   "name": "agent-harness",
   "private": true,
+  "packageManager": "npm@10.9.7",
+  "engines": {
+    "node": ">=20"
+  },
   "workspaces": [
     "agent-browser",
     "ext/*/*",
@@ -11,6 +15,7 @@
   "scripts": {
     "dev:agent-browser": "npm --workspace agent-browser run dev",
     "postinstall": "node scripts/apply-workspace-patches.mjs",
+    "prepare": "node scripts/install-hooks.mjs",
     "check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
     "test:api": "node --test --experimental-transform-types api/jsonBody.test.ts",
     "test:coverage:api": "node --test --experimental-transform-types --experimental-test-coverage --test-coverage-include=api/jsonBody.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 api/jsonBody.test.ts",

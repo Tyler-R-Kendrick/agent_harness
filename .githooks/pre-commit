@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+
+# Fast, local pre-commit gate (see DX.md / the Monorepo DX Playbook).
+# Whitespace and merge-conflict-marker hygiene on staged content. This is a
+# cross-platform baseline for a polyglot (Node + Deno + PowerShell) repo; the
+# full validation gate remains `npm run verify:agent-browser`.
+git diff --cached --check
