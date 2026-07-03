@@ -176,6 +176,17 @@ async function main() {
     rootReadme,
     /\[`ext\/README\.md`\]\(\.\/ext\/README\.md\) \| `ext\/\*\/\*` \| Workspace index for the public IDE, harness, provider, and worker extension packages\./,
   );
+  const browserWorkerReadme = await readScript('lib/workers/browser/README.md');
+  assert.match(browserWorkerReadme, /## Public surface/);
+  assert.match(browserWorkerReadme, /BrowserWorkerProviderId/);
+  assert.match(browserWorkerReadme, /CapWorkerJobSkillCreate/);
+  assert.match(browserWorkerReadme, /CapWorkerSandboxOrchestration/);
+  assert.match(browserWorkerReadme, /## Minimal flow/);
+  assert.match(browserWorkerReadme, /context\.sandboxBroker\.createSandbox/);
+  assert.match(browserWorkerReadme, /## Secure SSH tunnel jobs/);
+  assert.match(browserWorkerReadme, /strictHostKeyChecking: true/);
+  assert.match(browserWorkerReadme, /## Failure modes/);
+  assert.match(browserWorkerReadme, /npm --workspace @agent-harness\/worker-browser run test:coverage/);
   assert.match(extReadme, /## Worker extensions/);
   assert.match(
     extReadme,
@@ -211,8 +222,12 @@ async function main() {
     'worker',
     'workgraph',
   ]) {
-    assert.match(rootReadme, new RegExp(escapeRegExp(`lib/${packageDirectory}/README.md`)));
-    assert.match(rootReadme, new RegExp(escapeRegExp(`(./lib/${packageDirectory}/README.md)`)));
+    assert.match(
+      rootReadme,
+      new RegExp(
+        escapeRegExp(`[\`lib/${packageDirectory}/README.md\`](./lib/${packageDirectory}/README.md)`),
+      ),
+    );
   }
   assert.match(workerReadme, /## Core building blocks/);
   assert.match(workerReadme, /## Minimal worker and sandbox flow/);
