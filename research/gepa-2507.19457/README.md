@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # GEPA (arXiv:2507.19457)
 
 - Paper: **GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning**

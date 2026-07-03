@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Constraint Tax (arXiv:2606.25605)
 
 - Paper: **The Constraint Tax: Structured Output Degrades Tool-Calling in Open-Weight LLMs**

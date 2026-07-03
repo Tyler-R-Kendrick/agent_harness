@@ -1,5 +1,14 @@
 # AGENTS.md
 
+This file holds the repository's concrete operating rules for coding agents.
+Companion references:
+
+- [`SCAFFOLD.md`](./SCAFFOLD.md) — semantic map of directories, root files, and
+  `lib/` project conventions.
+- [`STEERING.md`](./STEERING.md) — generalized reasoning-strategy corrections
+  (how to reason about a class of task).
+- [`MEMORY.md`](./MEMORY.md) — durable, cross-session facts and corrections.
+
 ## git usage
 
 Always use `git mv` to rename/move files.
@@ -69,51 +78,8 @@ When this repo is running inside a GitHub Codespace, do not use `http://localhos
 
 ## Scaffolding
 
-Use project specific cli tools to scaffold instead of manually creating/editing files (dotnet, uv, npm, etc.)
+Prefer project-specific CLI tools to scaffold new packages instead of hand-authoring boilerplate (see [`STEERING.md`](./STEERING.md) rule 5).
 
 ## lib/ project conventions
 
-Self-contained TypeScript libraries live under `lib/<name>/`. Each follows this structure:
-
-```
-lib/<name>/
-  package.json        # "type": "module"; main/types/exports all point to ./src/index.ts
-  tsconfig.json       # strict mode, ESNext, bundler module resolution
-  vitest.config.ts    # v8 coverage, 100% threshold on all metrics
-  src/
-    index.ts          # barrel – re-exports public API (excluded from coverage)
-    types.ts          # shared interfaces / type aliases
-    *.ts              # feature modules
-    __tests__/
-      *.test.ts       # co-located unit tests, one file per module
-```
-
-### Tooling
-
-- **Test runner / coverage**: `vitest` + `@vitest/coverage-v8` (no Jest)
-- **AI SDK**: Vercel AI SDK (`ai` ^6, `@ai-sdk/openai` ^1) declared as a `peerDependency`; installed as a `devDependency` for tests
-- **Scripts**: `test` → `vitest run`, `test:watch` → `vitest`, `test:coverage` → `vitest run --coverage`
-- No bundler step — consumers import TypeScript source directly via the `exports` map
-
-### Coverage requirements
-
-`vitest.config.ts` must enforce 100% on lines, branches, functions, and statements:
-
-```ts
-coverage: {
-  provider: 'v8',
-  reporter: ['text', 'lcov'],
-  include: ['src/**/*.ts'],
-  exclude: ['src/**/*.test.ts', 'src/__tests__/**', 'src/index.ts'],
-  thresholds: { lines: 100, functions: 100, branches: 100, statements: 100 },
-}
-```
-
-### Existing libs
-
-| Library | Purpose |
-|---|---|
-| `lib/inbrowser-use` | Playwright-shaped in-app DOM control runtime |
-| `lib/logact` | LogAct agentic reliability pattern (Meta Labs, arXiv 2604.07988) — deconstructed state-machine agents backed by a shared append-only log |
-| `lib/agent-browser-mcp` | Agent-browser MCP server — all agent-browser-specific tool, resource, prompt, and prompt-template definitions (e.g. the WebMCP bridge). Add new MCP features here. |
-| `lib/webmcp` | Spec-faithful WebMCP polyfill and runtime (ModelContext, ToolRegistry, install). Generic — no agent-browser specifics. |
+The `lib/<name>/` package structure, tooling, and 100%-coverage requirements are documented in [`SCAFFOLD.md`](./SCAFFOLD.md#lib-project-conventions); the per-library purpose index is the README workspace table.

@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # NadirClaw Cost-Aware LLM Routing (2026-05-10)
 
 - **Title:** How to Build a Cost-Aware LLM Routing System with NadirClaw Using Local Prompt Classification and Gemini Model Switching

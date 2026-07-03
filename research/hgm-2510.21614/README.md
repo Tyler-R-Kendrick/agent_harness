@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # HGM (arXiv:2510.21614)
 
 - Paper: **Huxley-Gödel Machine: Human-Level Coding Agent Development by an Approximation of the Optimal Self-Improving Machine**

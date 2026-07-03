@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # δ-mem (arXiv:2605.12357)
 
 - Paper: **δ-mem: Efficient Online Memory for Large Language Models**

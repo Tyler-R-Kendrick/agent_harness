@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Act Wisely (arXiv:2604.08545) — Metis/HDPO Research Packet
 
 ## Paper intake

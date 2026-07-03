@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Memp (arXiv:2508.06433)
 
 - Paper: **Memp: Exploring Agent Procedural Memory** — Zhejiang University / Alibaba
