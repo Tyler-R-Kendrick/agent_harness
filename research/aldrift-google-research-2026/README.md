@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # ALDRIFT (Google Research, 2026)
 
 - Paper/topic: **ALDRIFT: AI answers that do more than sound plausible**

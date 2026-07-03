@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Give Your AI Unlimited Updated Context (Towards Data Science, 2026)
 
 - Article: **Give Your AI Unlimited Updated Context**

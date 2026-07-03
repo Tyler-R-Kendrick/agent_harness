@@ -2,6 +2,7 @@
   "name": "@agent-harness/worker-daemon",
   "version": "0.1.0",
   "description": "Daemon-backed worker provider adapters for agent_harness",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

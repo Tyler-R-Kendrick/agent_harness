@@ -13,9 +13,13 @@
     "eval:codi-general": "node scripts/run-agentv-codi-general-eval.mjs",
     "eval:codi-staged-search": "node scripts/run-agentv-codi-staged-search-eval.mjs",
     "eval:chat-loop": "npm run eval:codi-general",
+    "eval:artifact-generation": "node scripts/run-agentv-artifact-generation-eval.mjs",
+    "eval:cost-routing": "node scripts/run-agentv-cost-routing-eval.mjs",
+    "eval:route-selection-dsr": "node scripts/run-agentv-route-selection-dsr-eval.mjs",
     "eval:search": "node scripts/run-agentv-search-eval.mjs",
     "eval:search:live": "node scripts/run-agentv-search-eval.mjs --live",
     "eval:self-reflection": "node scripts/run-agentv-self-reflection-eval.mjs",
+    "eval:staged-routing-rollout": "node scripts/run-agentv-staged-routing-rollout-eval.mjs",
     "eval:tour-guide": "node scripts/run-agentv-tour-guide-eval.mjs",
     "eval:web-search": "node scripts/run-agentv-web-search-eval.mjs",
     "lint": "node ../scripts/run-package-bin.mjs typescript -b --noEmit",
@@ -91,7 +95,7 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "@agentv/eval": "^4.24.1",
+    "@agentv/eval": "4.41.1",
     "@anthropic-ai/sdk": "0.95.0",
     "@cucumber/cucumber": "^12.8.0",
     "@playwright/test": "^1.59.1",

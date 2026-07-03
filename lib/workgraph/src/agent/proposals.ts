@@ -40,7 +40,7 @@ export async function applyAgentIssueProposal(
       metadata: {
         branchName: proposal.branchName,
         proposedByAgentId: proposal.requestedBy.id,
-        validation: proposal.validation,
+        validation: [...proposal.validation],
       },
     },
   });

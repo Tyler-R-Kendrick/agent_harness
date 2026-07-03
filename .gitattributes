@@ -1,0 +1,15 @@
+* text=auto
+
+# Keep durable binary assets out of textual diffs and line-ending normalization.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.wasm binary
+*.exe binary
+*.dll binary
+*.node binary

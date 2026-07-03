@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Synapse (Godot Asset 5150): Graph-Based State Machine
 
 ## Paper/Asset Intake

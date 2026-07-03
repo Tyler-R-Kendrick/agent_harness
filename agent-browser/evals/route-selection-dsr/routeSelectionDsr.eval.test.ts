@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import fixtures from './fixtures.json';
 
 type ModeTrace = {
@@ -14,6 +15,22 @@ type ModeTrace = {
 };
 
 type EvalMode = 'legacy' | 'dsr';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+type RouteSelectionEvalCase = {
+  id: string;
+  task: string;
+  expected_output: string;
+};
+
+function readCases(): RouteSelectionEvalCase[] {
+  return readFileSync(path.join(__dirname, 'cases.jsonl'), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as RouteSelectionEvalCase);
+}
 
 function runMode(mode: EvalMode): ModeTrace[] {
   return fixtures.cases.map((testCase) => ({
@@ -57,6 +74,37 @@ function diffRoutes(legacy: ModeTrace[], dsr: ModeTrace[]): Array<{ caseId: stri
 }
 
 describe('route selection + composite execution DSR gate', () => {
+  it('declares a real AgentV target, runner, and checked-in cases for the rollout gate', async () => {
+    const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const targetsYaml = readFileSync(path.resolve(__dirname, '../../../.agentv/targets.yaml'), 'utf8');
+    const evalYaml = readFileSync(path.join(__dirname, 'EVAL.yaml'), 'utf8');
+    const cases = readCases();
+    const { buildAgentvRouteSelectionDsrEvalCommand } = await import(
+      pathToFileURL(path.resolve(__dirname, '../../scripts/run-agentv-route-selection-dsr-eval.mjs')).href
+    );
+    const command = buildAgentvRouteSelectionDsrEvalCommand();
+
+    expect(packageJson.scripts['eval:route-selection-dsr']).toBe('node scripts/run-agentv-route-selection-dsr-eval.mjs');
+    expect(targetsYaml).toContain('name: agent-browser-route-selection-dsr');
+    expect(targetsYaml).toContain('route-selection-dsr-eval-target-runtime.ts');
+    expect(evalYaml).toContain('target: agent-browser-route-selection-dsr');
+    expect(evalYaml).toContain('type: tool-trajectory');
+    expect(evalYaml).toContain('type: code-grader');
+    expect(cases.map((entry) => entry.id)).toEqual(fixtures.cases.map((entry) => entry.id));
+    expect(command.packageName).toBe('agentv');
+    expect(command.args).toEqual(expect.arrayContaining([
+      'eval',
+      'run',
+      'agent-browser/evals/route-selection-dsr/EVAL.yaml',
+      '--target',
+      'agent-browser-route-selection-dsr',
+      '--threshold',
+      '1',
+    ]));
+  });
+
   it('runs shared route-selection cases in legacy and DSR modes and writes decision traces for diffing', () => {
     const legacy = runMode('legacy');
     const dsr = runMode('dsr');

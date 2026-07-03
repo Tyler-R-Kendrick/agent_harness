@@ -50,10 +50,20 @@ blob-report/
 test-results/
 junit.xml
 test-results.xml
+*.har
+trace.zip
 .vercel/
 .next/
 *.tsbuildinfo
 *.log
+report.*.json
+core
+!core/
+!**/core/
+!**/core/**
+core.[0-9]*
+*.dmp
+*.mdmp
 .vite/
 .vitest/
 .turbo/
@@ -63,6 +73,9 @@ test-results.xml
 *.cpuprofile
 *.heapprofile
 *.heapsnapshot
+agent-daemon/dist/
+agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe
+ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe
 
 agent-browser-running.png
 agent-browser-chat-ui-validation.png

@@ -1,0 +1,19 @@
+slug: browser-tools-mcp
+name: BrowserTools MCP
+vendor: AgentDeskAI
+segment: local-browser-observability-mcp
+product_path: competition/browser-tools-mcp
+design_path: competition/browser-tools-mcp/design
+features_path: competition/browser-tools-mcp/features
+marketing_path: competition/browser-tools-mcp/marketing
+gossip_path: competition/browser-tools-mcp/gossip
+snapshot_date: 2026-06-11
+primary_sources:
+  - https://github.com/AgentDeskAI/browser-tools-mcp
+  - https://browsertools.agentdesk.ai/
+secondary_sources:
+  - https://arxiv.org/abs/2512.10029
+positioning: "Local Chrome extension plus MCP server that makes coding agents aware of browser logs, screenshots, network traffic, DOM selections, and Lighthouse-style audits."
+customer_model: "Open-source developer utility for Cursor, Cline, Zed, Claude Desktop, and other MCP clients; AgentDeskAI brand and services capture the downstream developer-agent audience."
+competitive_threat_level: medium
+notes: "High GitHub attention and very practical debugging affordances, but repository status says the project is no longer active."

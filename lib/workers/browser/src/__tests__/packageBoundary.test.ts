@@ -14,12 +14,14 @@ function readPackageFile(path: string): string {
 describe('worker-browser package boundary', () => {
   test('publishes only runtime TypeScript sources and README', () => {
     const packageJson = JSON.parse(readPackageFile('package.json')) as {
+      license: string;
       main: string;
       types: string;
       exports: Record<string, string>;
       files: string[];
     };
 
+    expect(packageJson.license).toBe('MIT');
     expect(packageJson.main).toBe('./src/index.ts');
     expect(packageJson.types).toBe('./src/index.ts');
     expect(packageJson.exports).toEqual({ '.': './src/index.ts' });

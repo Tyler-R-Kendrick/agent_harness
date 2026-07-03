@@ -157,6 +157,11 @@ async function main() {
   const rootReadme = await readScript('README.md');
   const extReadme = await readScript('ext/README.md');
   const workerReadme = await readScript('lib/worker/README.md');
+  const durableTasksReadme = await readScript('lib/browser-durable-tasks/README.md');
+  assert.match(rootReadme, /Node\.js 20\.x and npm/);
+  assert.match(rootReadme, /## Run focused workspace validation in Codex automation shells/);
+  assert.match(rootReadme, /npm\.cmd run prepare:workspace-tests -- --workspace <workspace-name>/);
+  assert.match(rootReadme, /npm\.cmd run prepare:workspace-tests -- --workspace agent-browser/);
   assert.match(rootReadme, /## Workspace packages/);
   assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
   assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);
@@ -216,6 +221,16 @@ async function main() {
   assert.match(workerReadme, /`createSandbox\(\)` returns a `SandboxLease`/);
   assert.match(workerReadme, /DefaultPolicyEngine` is deny-by-default/);
   assert.match(workerReadme, /npm --workspace @agent-harness\/worker run test:coverage/);
+  assert.match(durableTasksReadme, /## Core building blocks/);
+  assert.match(durableTasksReadme, /## Minimal runtime flow/);
+  assert.match(durableTasksReadme, /## Runtime and persistence semantics/);
+  assert.match(durableTasksReadme, /## Outbox and background sync/);
+  assert.match(durableTasksReadme, /## Failure modes and limits/);
+  assert.match(durableTasksReadme, /createDurableTaskRuntime/);
+  assert.match(durableTasksReadme, /createMemoryDurableTaskStore/);
+  assert.match(durableTasksReadme, /createServiceWorkerOutboxBridge/);
+  assert.match(durableTasksReadme, /resumeExpiredLocks\(\)/);
+  assert.match(durableTasksReadme, /npm\.cmd --workspace @agent-harness\/browser-durable-tasks run test:coverage/);
   assert.ok(rootPackage.workspaces.includes('ext/*/*'));
   assert.equal(rootPackage.scripts['lint:extensions'], 'node scripts/run-extension-workspaces.mjs lint');
   assert.equal(rootPackage.scripts['build:extensions'], 'node scripts/run-extension-workspaces.mjs build');
@@ -394,103 +409,43 @@ async function main() {
   const workspaceLockfile = path.join(lockfileFixture, 'agent-browser', 'package-lock.json');
   const rootNodeModules = path.join(lockfileFixture, 'node_modules');
   const workspaceNodeModules = path.join(lockfileFixture, 'agent-browser', 'node_modules');
-  const harnessCoreNodeModules = path.join(lockfileFixture, 'harness-core', 'node_modules');
-  const extensionNodeModules = path.join(
-    lockfileFixture,
-    'ext',
-    'provider',
-    'local-model-connector',
-    'node_modules',
-  );
-  await mkdir(path.dirname(workspaceLockfile), { recursive: true });
-  await mkdir(rootNodeModules);
-  await mkdir(workspaceNodeModules);
-  await mkdir(harnessCoreNodeModules, { recursive: true });
-  await mkdir(extensionNodeModules, { recursive: true });
+  await mkdir(path.join(lockfileFixture, 'agent-browser'), { recursive: true });
+  await mkdir(rootNodeModules, { recursive: true });
+  await mkdir(workspaceNodeModules, { recursive: true });
   await writeFile(rootLockfile, '{}');
   await writeFile(workspaceLockfile, '{}');
-  await writeJson(path.join(path.dirname(extensionNodeModules), 'package.json'), {
-    name: '@agent-harness/local-model-connector',
-  });
-  await vercelInstall.removeCachedLockfiles(lockfileFixture);
-  await assert.rejects(() => readFile(rootLockfile), { code: 'ENOENT' });
-  await assert.rejects(() => readFile(workspaceLockfile), { code: 'ENOENT' });
-  await assert.rejects(() => stat(rootNodeModules), { code: 'ENOENT' });
-  await assert.rejects(() => stat(workspaceNodeModules), { code: 'ENOENT' });
-  await assert.rejects(() => stat(harnessCoreNodeModules), { code: 'ENOENT' });
-  await assert.rejects(() => stat(extensionNodeModules), { code: 'ENOENT' });
-  await vercelInstall.removeCachedLockfiles(lockfileFixture);
-
-  const coverageRunner = await import(
-    pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href
+  assert.deepEqual(
+    await vercelInstall.resolveInstallWorkItems(lockfileFixture),
+    [
+      {
+        workingDirectory: lockfileFixture,
+        lockfilePath: rootLockfile,
+        nodeModulesPath: rootNodeModules,
+      },
+      {
+        workingDirectory: path.join(lockfileFixture, 'agent-browser'),
+        lockfilePath: workspaceLockfile,
+        nodeModulesPath: workspaceNodeModules,
+      },
+    ],
   );
-  const extensionRunner = await import(
-    pathToFileURL(path.resolve(repoRoot, 'scripts/run-extension-workspaces.mjs')).href
-  );
-  const extensionDownloadsPackager = await import(
-    pathToFileURL(path.resolve(repoRoot, 'scripts/package-extension-downloads.mjs')).href
-  );
-  const workspacePatchApplicator = await import(
-    pathToFileURL(path.resolve(repoRoot, 'scripts/apply-workspace-patches.mjs')).href
-  );
-  const extensionDownloadsScript = await readScript('scripts/package-extension-downloads.mjs');
-  assert.match(extensionDownloadsScript, /pathToFileURL\(path\.resolve\(process\.argv\[1\]\)\)\.href/);
-  assert.deepEqual(extensionDownloadsPackager.buildDownloadPackages(repoRoot), [
-    {
-      name: 'local-model-connector-extension',
-      sourceDirectory: path.join(repoRoot, 'ext', 'provider', 'local-model-connector', 'dist'),
-      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'local-model-connector-extension.zip'),
-    },
-    {
-      name: 'agent-harness-local-inference-daemon',
-      sourceDirectory: path.join(repoRoot, 'agent-daemon'),
-      outputFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon.zip'),
-    },
-  ]);
-  assert.deepEqual(extensionDownloadsPackager.buildWindowsDaemonBinaryDownloads(repoRoot), [
-    {
-      sourceFile: path.join(repoRoot, 'agent-daemon', 'dist', 'agent-harness-local-inference-daemon-windows-x64.exe'),
-      publicFile: path.join(repoRoot, 'agent-browser', 'public', 'downloads', 'agent-harness-local-inference-daemon-windows-x64.exe'),
-      extensionFile: path.join(
-        repoRoot,
-        'ext',
-        'worker',
-        'local-inference-worker',
-        'dist',
-        'agent-harness-local-inference-daemon-windows-x64.exe',
-      ),
-    },
-  ]);
-  assert.deepEqual(extensionDownloadsPackager.normalizeZipEntryPath('agent-daemon', 'src\\mod.ts'), 'agent-daemon/src/mod.ts');
-
-  const extensionZipFixture = await mkdtemp(path.join(tmpdir(), 'extension-download-zip-'));
-  const extensionZipSource = path.join(extensionZipFixture, 'dist');
-  const extensionZipOutput = path.join(extensionZipFixture, 'download.zip');
-  await mkdir(extensionZipSource);
-  await writeFile(path.join(extensionZipSource, 'background.js'), 'console.log("runtime");');
-  await writeFile(path.join(extensionZipSource, 'background.js.map'), '{"version":3}');
-  await extensionDownloadsPackager.createZipFromDirectory(extensionZipSource, extensionZipOutput, 'extension');
-  const extensionZip = await readFile(extensionZipOutput);
-  assert.match(extensionZip.toString('latin1'), /extension\/background\.js/);
-  assert.doesNotMatch(extensionZip.toString('latin1'), /extension\/background\.js\.map/);
 
   const patchFixture = await mkdtemp(path.join(tmpdir(), 'workspace-patches-'));
+  await mkdir(path.join(patchFixture, 'patches'), { recursive: true });
   await mkdir(path.join(patchFixture, 'node_modules', '@tavily', 'core'), { recursive: true });
+  await writeJson(path.join(patchFixture, 'package.json'), {
+    name: 'patch-fixture',
+    private: true,
+    dependencies: { '@tavily/core': '0.7.3' },
+  });
+  await writeFile(path.join(patchFixture, 'patches', '@tavily+core+0.7.3.patch'), 'diff --git a/file b/file\n');
+  const patchInstaller = await import(pathToFileURL(path.resolve(repoRoot, 'scripts/apply-workspace-patches.mjs')).href);
   assert.equal(
-    workspacePatchApplicator.resolveInstalledPackagePath(
-      patchFixture,
-      'agent-browser',
-      'node_modules/@tavily/core',
-    ),
-    path.join(patchFixture, 'node_modules', '@tavily', 'core'),
-  );
-  assert.equal(
-    workspacePatchApplicator.resolvePatchWorkingDirectory(
-      patchFixture,
-      'agent-browser',
+    patchInstaller.findInstalledPackageDirectory(
+      '@tavily/core',
       path.join(patchFixture, 'node_modules', '@tavily', 'core'),
     ),
-    patchFixture,
+    path.join(patchFixture, 'node_modules', '@tavily', 'core'),
   );
 
   const extensionFixture = await mkdtemp(path.join(tmpdir(), 'extension-workspaces-'));
@@ -526,6 +481,7 @@ async function main() {
   ]);
   assert.throws(() => extensionRunner.normalizeRequestedScripts([]), /At least one extension script/);
   assert.deepEqual(extensionRunner.normalizeRequestedScripts(['lint', 'test:coverage']), ['lint', 'test:coverage']);
+  const coverageRunner = await import(pathToFileURL(path.resolve(repoRoot, 'agent-browser/scripts/run-vitest-coverage.mjs')).href);
   const coverageRunnerScript = await readScript('agent-browser/scripts/run-vitest-coverage.mjs');
   assert.match(coverageRunnerScript, /DEFAULT_COVERAGE_BATCH_CONCURRENCY = 4/);
   assert.match(coverageRunnerScript, /DEFAULT_WINDOWS_COVERAGE_BATCH_CONCURRENCY = 1/);

@@ -43,6 +43,25 @@ export function setHarnessTelemetryAttributes(span: Span, attributes: Attributes
   span.setAttributes(attributes);
 }
 
+export interface HarnessTelemetryReward {
+  value: number;
+  source: string;
+}
+
+/**
+ * Attach a reward slot to a span (Agent-Lightning-compatible trace schema).
+ *
+ * Phase 0 shadow mode: this only writes additive `reward.*` attributes, so it
+ * has no consumer and no behavior change. The same reward-slotted spans later
+ * feed reflection loops, trajectory retrieval, and RL training.
+ */
+export function setHarnessTelemetryReward(span: Span, reward: HarnessTelemetryReward): void {
+  setHarnessTelemetryAttributes(span, {
+    'reward.value': reward.value,
+    'reward.source': reward.source,
+  });
+}
+
 export function toHarnessTelemetryError(caught: unknown): Error {
   return caught instanceof Error ? caught : new Error(String(caught));
 }

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isJsonBodyError, readJsonBody } from './jsonBody';
+import { isJsonBodyError, readJsonBody } from './jsonBody.ts';
+import { normalizeSearchResultUrl } from './searchResultUrl.ts';
 
 export interface SearchWebRequest {
   query: string;
@@ -422,7 +423,7 @@ function parseDuckDuckGoHtml(html: string): SearchWebResultItem[] {
   for (const match of html.matchAll(linkPattern)) {
     const rawUrl = match[1] ?? '';
     const rawTitle = match[2] ?? '';
-    const url = normalizeUrl(resolveProviderUrl(rawUrl, 'https://duckduckgo.com'));
+    const url = normalizeSearchResultUrl(rawUrl, 'https://duckduckgo.com');
     const title = decodeHtml(stripTags(rawTitle));
     if (!title || !url) continue;
     const snippet = decodeHtml(readNearestSnippet(html, match.index ?? 0));
@@ -440,7 +441,7 @@ function parseBingHtml(html: string): SearchWebResultItem[] {
     if (!link) continue;
     const rawUrl = link[1] ?? '';
     const rawTitle = link[2] ?? '';
-    const url = normalizeUrl(resolveProviderUrl(rawUrl, 'https://www.bing.com'));
+    const url = normalizeSearchResultUrl(rawUrl, 'https://www.bing.com');
     const title = decodeHtml(stripTags(rawTitle));
     const snippet = decodeHtml(stripTags(/<p\b[^>]*>([\s\S]*?)<\/p>/i.exec(block)?.[1] ?? ''));
     if (title && url) results.push({ title, url, snippet });
@@ -452,67 +453,6 @@ function readNearestSnippet(html: string, index: number): string {
   const window = html.slice(index, index + 1600);
   const match = /<a\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/a>|<div\b[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>([\s\S]*?)<\/div>/i.exec(window);
   return stripTags(match?.[1] ?? match?.[2] ?? '');
-}
-
-function resolveProviderUrl(value: string, baseUrl: string): string {
-  try {
-    const url = new URL(value, baseUrl);
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : value;
-  } catch {
-    return value;
-  }
-}
-
-function normalizeUrl(url: string): string {
-  const duckDuckGoUrl = decodeDuckDuckGoRedirect(url);
-  if (duckDuckGoUrl) return duckDuckGoUrl;
-  const bingUrl = decodeBingRedirect(url);
-  if (bingUrl) return bingUrl;
-  return url;
-}
-
-function decodeDuckDuckGoRedirect(url: string): string | null {
-  if (!url.includes('uddg=')) return null;
-  try {
-    const parsed = new URL(url, 'https://duckduckgo.com');
-    const target = parsed.searchParams.get('uddg');
-    return target ? decodeURIComponent(target) : null;
-  } catch {
-    return null;
-  }
-}
-
-function decodeBingRedirect(url: string): string | null {
-  if (!/https?:\/\/(?:www\.)?bing\.com\/ck\/a/i.test(url) && !url.includes('bing.com/ck/a')) {
-    return null;
-  }
-  try {
-    const parsed = new URL(url, 'https://www.bing.com');
-    const encoded = parsed.searchParams.get('u');
-    if (!encoded) return null;
-    return decodeBingEncodedUrl(encoded);
-  } catch {
-    return null;
-  }
-}
-
-function decodeBingEncodedUrl(encoded: string): string | null {
-  const candidates = [encoded, encoded.startsWith('a1') ? encoded.slice(2) : encoded];
-  for (const candidate of candidates) {
-    try {
-      const normalized = candidate.replace(/-/g, '+').replace(/_/g, '/');
-      const decoded = Buffer.from(normalized, 'base64').toString('utf8');
-      if (/^https?:\/\//i.test(decoded)) return decoded;
-    } catch {
-      // Try the next encoding shape.
-    }
-  }
-  try {
-    const decoded = decodeURIComponent(encoded);
-    return /^https?:\/\//i.test(decoded) ? decoded : null;
-  } catch {
-    return null;
-  }
 }
 
 function stripTags(value: string): string {

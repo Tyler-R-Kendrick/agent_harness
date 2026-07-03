@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # MemPrivacy (arXiv:2605.09530)
 
 - Paper: **MemPrivacy: Privacy-Preserving Personalized Memory Management for Edge-Cloud Agents**

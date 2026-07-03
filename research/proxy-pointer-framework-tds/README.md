@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Proxy Pointer Framework for Structure-Aware Enterprise Document Intelligence
 
 - **Source**: Towards Data Science article, "Proxy Pointer Framework for Structure-Aware Enterprise Document Intelligence" (URL provided by requester).

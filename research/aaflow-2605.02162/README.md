@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # AAFLOW (arXiv:2605.02162)
 
 - Paper: **AAFLOW: Scalable Patterns for Agentic AI Workflows**

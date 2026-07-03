@@ -1,0 +1,25 @@
+{
+  "name": "@agent-harness/mcp-client",
+  "version": "0.1.0",
+  "description": "MCP client tool bridge: mount external MCP servers' tools into an AI SDK ToolSet (Phase 0 shadow mode)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": ["README.md", "src/**/*.ts", "!src/**/*.test.ts", "!src/__tests__/**"],
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "peerDependencies": { "ai": "^6.0.0" },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "ai": "^6.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}

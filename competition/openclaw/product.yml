@@ -1,0 +1,20 @@
+slug: openclaw
+name: OpenClaw
+vendor: OpenClaw
+segment: self-hosted-personal-ai-assistant
+product_path: competition/openclaw
+design_path: competition/openclaw/design
+features_path: competition/openclaw/features
+marketing_path: competition/openclaw/marketing
+gossip_path: competition/openclaw/gossip
+snapshot_date: 2026-06-12
+primary_sources:
+  - https://github.com/openclaw/openclaw
+  - https://docs.openclaw.ai/
+secondary_sources:
+  - https://www.theverge.com/news/874011/openclaw-ai-skill-clawhub-extensions-security-nightmare
+  - https://www.tomshardware.com/tech-industry/cyber-security/malicious-moltbot-skill-targets-crypto-users-on-clawhub
+positioning: "Self-hosted personal AI assistant that runs on the user's devices, answers through messaging channels, renders a controllable Canvas, and can invoke local skills."
+customer_model: "Open-source personal assistant for always-on local automation, messaging-app users, developers, and self-hosters; ecosystem growth comes through skills, channels, and community hosting patterns."
+competitive_threat_level: medium
+notes: "Captures always-on personal-agent demand, but public malicious-skill incidents expose the same local-authority and extension trust risks agent-browser must avoid."

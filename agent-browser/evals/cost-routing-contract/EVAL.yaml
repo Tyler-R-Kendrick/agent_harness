@@ -1,0 +1,26 @@
+name: cost-routing-contract
+version: "1.0"
+description: >
+  Deterministic AgentV gate for benchmark-aware cost routing. The route must
+  keep simple prompts on cheap models, escalate security/compliance prompts,
+  and preserve the checked-in misroute regression guard.
+metadata:
+  owner: agent-browser
+  tags: [cost-routing, benchmark-routing, deterministic, regression]
+execution:
+  target: agent-browser-cost-routing-contract
+  timeout_seconds: 10
+assertions:
+  - name: bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 1
+    max_tokens: 400
+    max_duration_ms: 250
+
+  - name: route-contract
+    type: code-grader
+    required: true
+    command: ["node", "./graders/cost-routing-contract-gate.mjs"]
+
+tests: ./cases.jsonl
