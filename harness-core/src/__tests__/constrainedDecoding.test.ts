@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import {
+  CONSTRAINED_DECODING_DECODE_HOOK_POINT,
+  CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
   buildToonLlGuidanceGrammar,
   constrainToJsonSchema,
   constrainToLarkGrammar,
@@ -15,7 +17,10 @@ import {
   guidanceConnectionString,
   resolveGuidanceTsGrammar,
   toGuidanceTsGrammar,
+  type ConstrainedOutputDecodeHookPayload,
+  type ConstrainedOutputGrammarHookPayload,
   type CoreInferenceOptions,
+  type LarkConstrainedDecoding,
 } from '../index.js';
 
 interface GuidanceRequest {
@@ -101,6 +106,49 @@ async function createToonHooks() {
   return context.hooks;
 }
 
+// Mirrors lib/intent-dsl's plugin: pipes fire only for a `lark` decoding carrying an
+// `intentDomain` discriminator this test owns. A plain `lark` decoding leaves both pipes
+// returning undefined, exercising the additive fall-back to inline compilation/decoding.
+function larkIntentDomainOf(decoding: LarkConstrainedDecoding<unknown>): string | undefined {
+  return (decoding as { intentDomain?: string }).intentDomain;
+}
+
+function createLarkHooks() {
+  const context = createHarnessExtensionContext();
+  context.hooks.registerPipe<ConstrainedOutputGrammarHookPayload>({
+    id: 'test-lark:grammar',
+    point: CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
+    kind: 'deterministic',
+    run: ({ payload }) => {
+      if (payload.decoding.kind !== 'lark' || larkIntentDomainOf(payload.decoding) === undefined) {
+        return undefined;
+      }
+      return {
+        payload: {
+          ...payload,
+          grammar: constrainToLarkGrammar('start: "PLUGIN"', { maxTokens: payload.decoding.maxTokens }),
+        },
+        stop: true,
+      };
+    },
+  });
+  context.hooks.registerPipe<ConstrainedOutputDecodeHookPayload>({
+    id: 'test-lark:decode',
+    point: CONSTRAINED_DECODING_DECODE_HOOK_POINT,
+    kind: 'deterministic',
+    run: ({ payload }) => {
+      if (payload.decoding.kind !== 'lark' || larkIntentDomainOf(payload.decoding) === undefined) {
+        return undefined;
+      }
+      return {
+        payload: { ...payload, decoded: { plugin: true, text: payload.text } },
+        stop: true,
+      };
+    },
+  });
+  return context.hooks;
+}
+
 describe('constrained decoding grammar adapters', () => {
   it('serializes JSON Schema, Lark, and hook-provided TOON constraints for guidance-ts', async () => {
     const hooks = await createToonHooks();
@@ -128,6 +176,32 @@ describe('constrained decoding grammar adapters', () => {
       .rejects.toThrow('No constrained decoding hook resolved toon');
     expect((await resolveGuidanceTsGrammar(constrainToToon(), { hooks })).serialize())
       .toEqual(buildToonLlGuidanceGrammar());
+  });
+
+  it('routes Lark constraints through the grammar hook, falling back to inline compilation', async () => {
+    const hooks = createLarkHooks();
+    const larkGrammar = 'start: "APPROVE"';
+
+    // A registered grammar pipe resolves the intent decoding: the plugin grammar wins.
+    const intentDecoding = {
+      ...constrainToLarkGrammar(larkGrammar, { maxTokens: 12 }),
+      intentDomain: 'demo',
+    } as LarkConstrainedDecoding;
+    expect((await resolveGuidanceTsGrammar(intentDecoding, { hooks })).serialize())
+      .toEqual({
+        grammars: [{ name: 'lark_grammar', lark_grammar: 'start: "PLUGIN"' }],
+        max_tokens: 12,
+      });
+
+    // Hooks present but no pipe resolves (plain lark, no discriminator): inline path runs,
+    // identical to the current inline compilation.
+    const plainDecoding = constrainToLarkGrammar(larkGrammar, { maxTokens: 8 });
+    expect((await resolveGuidanceTsGrammar(plainDecoding, { hooks })).serialize())
+      .toEqual(toGuidanceTsGrammar(plainDecoding).serialize());
+
+    // No hooks registered at all: inline compilation, byte-for-byte as before.
+    expect((await resolveGuidanceTsGrammar(constrainToLarkGrammar(larkGrammar))).serialize())
+      .toEqual({ grammars: [{ name: 'lark_grammar', lark_grammar: larkGrammar }] });
   });
 
   it('defaults Zod constraints to JSON Schema and allows grammar overrides', () => {
@@ -350,6 +424,28 @@ describe('constrained output decoding', () => {
     }), { hooks })).resolves.toEqual({ value: { status: 'ok' }, parsed: true });
 
     expect(zodLikeSchema.parse).toHaveBeenCalledWith({ status: 'ok' });
+  });
+
+  it('routes Lark decoding through the decode hook, falling back to inline parsing', async () => {
+    const hooks = createLarkHooks();
+
+    // A registered decode pipe resolves the intent decoding: the plugin output wins.
+    const intentDecoding = {
+      ...constrainToLarkGrammar('start: "x"'),
+      intentDomain: 'demo',
+    } as LarkConstrainedDecoding;
+    await expect(decodeConstrainedOutputWithHooks('raw text', intentDecoding, { hooks }))
+      .resolves.toEqual({ plugin: true, text: 'raw text' });
+
+    // Hooks present but no pipe resolves (plain lark): inline parse runs, identical to
+    // decodeConstrainedOutput (honours the decoding's own parse).
+    await expect(decodeConstrainedOutputWithHooks('APPROVE', constrainToLarkGrammar('start: "APPROVE"', {
+      parse: (text) => text.toLowerCase(),
+    }), { hooks })).resolves.toBe('approve');
+
+    // No hooks registered at all: inline decode, identical to before (raw text passthrough).
+    await expect(decodeConstrainedOutputWithHooks('APPROVE', constrainToLarkGrammar('start: "APPROVE"')))
+      .resolves.toBe('APPROVE');
   });
 
   it('reports invalid Zod schema conversion errors', () => {

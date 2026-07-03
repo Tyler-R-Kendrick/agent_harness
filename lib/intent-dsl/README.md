@@ -37,3 +37,22 @@ package does **not** modify harness-core's `ConstrainedDecoding` union (its kind
 harness constructs such a decoding in Phase 0, so the pipes always return `undefined` and
 every existing constrained-decoding path is completely unaffected. Turning constraining ON
 at emission points is a later phase (`intent.mode=enforce`).
+
+## harness-core now routes `lark` through the grammar/decode hooks
+
+harness-core previously compiled and decoded `lark` constraints inline, bypassing the
+constrained-decoding hook points, so these pipes could register but never fire. harness-core
+now consults the grammar hook (`CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT`) and the decode hook
+(`CONSTRAINED_DECODING_DECODE_HOOK_POINT`) **first** for `lark` decodings, exactly as it
+already did for `toon`, and falls back to the current inline compilation/decoding when no
+pipe resolves. That fall-back means existing plain-`lark` consumers are byte-for-byte
+unchanged. As a result, `createIntentDslGrammarPlugin()` now actually fires when an intent
+decoding (`kind: 'lark'` **plus** the `intentDomain` discriminator this package owns) is
+passed to `createGuidanceTsInferenceClient`.
+
+The remaining app-side steps to light this up end-to-end are:
+
+- thread a `ConstrainedDecoding` option onto the Codi inference call,
+- register `createIntentDslGrammarPlugin()` into the live `HookRegistry`,
+- add `intent.mode` config, and
+- wire `llguidance-wasm` for the browser tier.
