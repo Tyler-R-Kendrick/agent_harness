@@ -296,6 +296,7 @@ import {
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
 import { resolveSandboxPolicyFromFs } from './sandbox/policySource';
+import { mountMcpClientShadow, resolveMcpServersFromFs } from './mcp/mcpClientSource';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
   createMessageCopyLabel,
@@ -3700,6 +3701,27 @@ function ChatPanel({
     const bash = getSessionBash(activeSessionId);
     onTerminalFsPathsChanged(activeSessionId, bash.fs.getAllPaths());
   }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged]);
+
+  // Phase 1 shadow: log-only, not merged into the active tools/selectToolsByIds set.
+  useEffect(() => {
+    if (!sandboxFlags.mcpClientEnabled || !activeSessionId) return;
+    let cancelled = false;
+    void (async () => {
+      const bash = getSessionBash(activeSessionId);
+      const servers = await resolveMcpServersFromFs({
+        enabled: sandboxFlags.mcpClientEnabled,
+        reader: bash.fs,
+      });
+      if (cancelled) return;
+      await mountMcpClientShadow({
+        servers,
+        logger: (message) => console.info(`[agent-browser:mcp-shadow] ${message}`),
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, getSessionBash, sandboxFlags.mcpClientEnabled]);
 
   useEffect(() => {
     if (showBash) {
@@ -15993,6 +16015,10 @@ function AgentBrowserApp() {
       touchesStyling: true,
     },
   }), [activeWorkspace.name, harnessEvolutionSettings]);
+  // Phase 1: opt-in archive recording attaches here — a guarded
+  // recordHarnessEvolutionGenome(archive, settingsHarnessEvolutionPlan) call
+  // (from ./services/harnessArchiveRecorder) once a workspace-scoped
+  // HarnessArchive is threaded through. Record-only, never gates evolution.
   const activeMultitaskSubagentState = useMemo(
     () => {
       const storedWorkspaceState = multitaskSubagentStateByWorkspace[activeWorkspaceId];

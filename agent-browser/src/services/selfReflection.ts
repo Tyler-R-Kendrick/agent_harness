@@ -1,3 +1,4 @@
+import { recordActiveHarnessReward } from 'harness-core';
 import type { ToolDescriptor } from '../tools';
 
 export interface WorkspaceSelfReflectionInventory {
@@ -194,6 +195,7 @@ export function evaluateSelfReflectionAnswer({
 
   const passedCount = assertions.filter((assertion) => assertion.passed).length;
   const score = assertions.length ? passedCount / assertions.length : 0;
+  recordActiveHarnessReward({ value: score, source: 'self-reflection' }); // Phase 1 shadow: no-ops without an active span.
   return {
     passed: assertions.every((assertion) => assertion.passed),
     score,

@@ -141,4 +141,29 @@ describe('selfReflection', () => {
       'mentions-runtime-tools',
     ]));
   });
+
+  it('keeps evaluation output unchanged by the side-effect-only reward emission', () => {
+    const answer = buildWorkspaceSelfReflectionAnswer({
+      task: 'What are your capabilities and limits?',
+      workspaceName: 'Research',
+      workspacePromptContext: SAMPLE_WORKSPACE_CONTEXT,
+      toolDescriptors: TOOL_DESCRIPTORS,
+    });
+
+    // The reward call runs with no active OpenTelemetry span, so it no-ops and
+    // must not perturb the returned evaluation.
+    const evaluation = evaluateSelfReflectionAnswer({
+      task: 'What are your capabilities and limits?',
+      answer,
+      workspacePromptContext: SAMPLE_WORKSPACE_CONTEXT,
+      toolDescriptors: TOOL_DESCRIPTORS,
+    });
+
+    expect(evaluation).toEqual({
+      passed: true,
+      score: 1,
+      assertions: evaluation.assertions,
+    });
+    expect(evaluation.assertions.every((assertion) => assertion.passed)).toBe(true);
+  });
 });

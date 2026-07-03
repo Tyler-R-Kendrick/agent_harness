@@ -135,6 +135,14 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../lib/sandbox-policy/src/index.ts'),
       },
       {
+        find: '@agent-harness/mcp-client',
+        replacement: path.resolve(__dirname, '../lib/mcp-client/src/index.ts'),
+      },
+      {
+        find: '@agent-harness/harness-archive',
+        replacement: path.resolve(__dirname, '../lib/harness-archive/src/index.ts'),
+      },
+      {
         find: '@agent-harness/prompt-budget',
         replacement: path.resolve(__dirname, '../lib/prompt-budget/src/index.ts'),
       },
