@@ -1,7 +1,7 @@
 # OpenClaw
 
 - Harness: OpenClaw
-- Refreshed: 2026-06-01
+- Refreshed: 2026-06-11
 
 ## Current feature map
 - `acp-agent-harness-adapters`: ACP-backed access to external agent runtimes like Codex and Claude with thread-bound session routing.
@@ -11,6 +11,7 @@
 - `chat-app-everywhere-interface`: one gateway fronts many messaging channels plus web chat and dashboard surfaces.
 - `command-queue-and-progress-drafts`: in-flight steering, follow-up queue modes, and visible work-in-progress drafts.
 - `control-ui-and-dashboard`: browser dashboard for chat, config, sessions, nodes, and admin approvals.
+- `digest-verified-plugin-packages-and-managed-version-drift`: ClawHub package artifacts, compatibility gates, dry-run publish plans, and managed update drift signals.
 - `full-system-access-and-self-hosting`: local-first self-hosted gateway with remote-over-SSH operation.
 - `multi-agent-workspaces-and-routing`: isolated agents with separate workspaces, auth state, session stores, and per-agent tool policies.
 - `permission-modes-auto-review-and-chat-native-approvals`: normalized host-exec permission modes that combine allowlists, native auto-review, Codex Guardian integration, and human approval fallback.
@@ -23,6 +24,7 @@
 ## First-party sources used in this refresh
 - [OpenClaw overview](https://docs.openclaw.ai/)
 - [GitHub repository README](https://github.com/openclaw/openclaw)
+- [OpenClaw changelog](https://github.com/openclaw/openclaw/blob/main/CHANGELOG.md)
 - [OpenClaw releases](https://github.com/openclaw/openclaw/releases)
 - [Agent Runtime](https://docs.openclaw.ai/concepts/agent)
 - [Multi-Agent Routing](https://docs.openclaw.ai/concepts/multi-agent)
@@ -46,4 +48,4 @@
 - Official visuals are embedded directly in the docs for Control UI, Dashboard, Canvas, browser tooling, Workboard, and node/mobile workflows.
 
 ## Product signal
-OpenClaw has moved beyond “chat with an agent from Messenger.” The current product direction is a self-hosted agent gateway with explicit runtime routing, queue control, operator workboards, policy-first host execution, and audited skill distribution across chat apps, browsers, desktops, and mobile nodes.
+OpenClaw has moved beyond “chat with an agent from Messenger.” The current product direction is a self-hosted agent gateway with explicit runtime routing, queue control, operator workboards, policy-first host execution, and audited package distribution across chat apps, browsers, desktops, and mobile nodes.

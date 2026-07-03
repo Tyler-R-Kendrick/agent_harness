@@ -1,34 +1,34 @@
 # Summary Diff For Linear Feature Generation
 
-Updated: 2026-06-07
-Baseline: `.features/Summary.md` refreshed through the 2026-06-06 Hermes Agent corpus.
-Diff type: additive updates after the 2026-06-07 OpenAI Symphony refresh
+Updated: 2026-06-12
+Baseline: `.features/Summary.md` refreshed through the 2026-06-11 OpenClaw corpus.
+Diff type: additive updates after the 2026-06-12 Codex refresh
 
 ## Net new normalized features
 
-### Added: Tracker-backed claim leases with heartbeat expiry and restart recovery
-- Why now: the refreshed OpenAI Symphony corpus adds a first-party lease layer that persists worker ownership in the tracker and then extends that model into Jira.
+### Added: Authenticated app-server protocols for detachable rich clients
+- Why now: the refreshed Codex corpus now documents Codex's app-server as a first-party integration surface rather than just an implementation detail behind the app and IDE. That makes the client/runtime split explicit and productized.
 - Research delta:
-  - Symphony PR #82 adds claim lease state with worker id, workspace path, retry attempt, heartbeat timestamp, expiry, and operator-visible recovery events
-  - the same PR publishes active, retrying, and blocked lease markers back to the tracker and surfaces that state in the JSON API and LiveView dashboard
-  - Symphony PR #83 adds Jira support for reading and upserting those lease markers by editing existing comments instead of appending unbounded heartbeat spam
-  - together, the two PRs turn safe restart recovery from an in-memory orchestration detail into a durable tracker contract that can survive daemon restarts and cross-tracker deployments
+  - current Codex docs describe `codex app-server` as the interface used to power rich clients such as the Codex VS Code extension, with JSON-RPC thread, turn, steering, and approval flows
+  - the CLI can attach to another machine's live runtime with `codex --remote ...`, which turns the terminal UI into a detachable client instead of the only place where the runtime can live
+  - remote app-server use documents capability-token and signed-bearer-token auth, health probes, bounded-queue overload behavior, and retry expectations, which shows a more mature remote-client contract than a best-effort local socket
+  - schema-generation commands for TypeScript and JSON Schema let integrators pin the contract to a specific Codex version
+  - experimental fields and methods are gated through initialize-time client capabilities, which gives Codex a versioning and compatibility story for richer clients
 
 ## Expanded normalized features
 
-### Expanded: Issue-tracker control planes
-- Why now: the refreshed OpenAI Symphony corpus shows the tracker evolving from intake queue into durable runtime coordination surface.
+### Expanded: Multi-surface continuity
+- Why now: the Codex refresh sharpens continuity from "same thread across app, CLI, IDE, cloud, and phone" into "same runtime contract can be driven by multiple detachable clients."
 - Research delta:
-  - Symphony no longer treats tracker state as just task metadata; it now writes lease ownership and recovery state back into tracker comments
-  - Jira support means the same runtime coordination contract is being designed to survive beyond one tracker adapter
-  - this pushes the broader control-plane idea toward tracker-native ownership, heartbeat, and handoff semantics instead of relying only on local orchestrator memory
+  - the operator surface is not just portable at the UX layer; the runtime itself is now exposed as a reusable client protocol
+  - this reduces the need for each new client to embed private orchestration and approval logic, which lowers the barrier to adding future surfaces
 
 ## Linear-ready feature payloads
 
-### Proposed Linear feature: Add tracker-backed claim leases with heartbeat expiry and restart recovery
+### Proposed Linear feature: Add an authenticated app-server protocol for detachable agent-browser clients
 - Linear issue title:
-  - `Add tracker-backed claim leases with heartbeat expiry and restart recovery`
+  - `Add an authenticated app-server protocol for detachable agent-browser clients`
 - Suggested problem statement:
-  - `agent-browser` can run long-lived and background work, but it still lacks a durable ownership contract that survives orchestrator restarts, multiple runners, and tracker reconnects. Competitors are starting to persist worker leases back into the issue tracker with heartbeat, expiry, blocked, and retry state so dispatch recovery does not duplicate live work or silently strand tasks after host failure. Without a tracker-backed lease model, restart recovery stays fragile, operator trust stays low, and multi-runner orchestration cannot scale safely across tracker adapters. The product needs explicit claim leases that are visible in both the tracker and operator UI, portable across tracker providers, and capable of safe handoff when leases expire.`
+  - `agent-browser` currently treats its UI surfaces as tightly coupled to the runtime that executes agent turns. Competitors are starting to separate those layers. Codex now exposes a first-party app-server protocol that powers rich clients like the IDE extension, lets a remote terminal attach to the same live runtime, carries approvals and steering as protocol messages, supports explicit remote authentication, and publishes version-matched schemas for integrators. Without a comparable protocol, `agent-browser` has to re-embed orchestration, approvals, and event-stream handling in each surface we build, which makes new clients harder to ship and remote supervision harder to standardize. The product needs a stable runtime contract that lets browser, IDE, terminal, and embedded clients attach to one live agent session with explicit authentication and compatibility boundaries.`
 - One-shot instruction for an LLM:
-  - Implement tracker-backed claim leases for `agent-browser`: whenever a task is claimed, persist a durable lease record containing worker id, workspace path, attempt number, heartbeat timestamp, expiry, and blocked or retry state; surface the lease in the operator UI and the tracker itself; refuse duplicate dispatch when an unexpired external lease already exists; recover expired or dead-worker leases by requeueing or handing off the task safely; update existing tracker markers in place when possible to avoid comment spam; and keep the lease abstraction portable so Linear, Jira, and future tracker adapters can share the same ownership and recovery contract.
+  - Implement an authenticated app-server protocol for `agent-browser` that exposes threads, turns, in-flight steering, approvals, tool events, file or artifact updates, and status notifications over a stable transport contract; support local transports first and authenticated remote attachment second; let thin clients such as a browser console, IDE panel, or terminal attach to the same runtime session; generate version-matched TypeScript and JSON Schema artifacts for integrators; and gate experimental methods or fields behind declared client capabilities so the runtime can evolve without breaking stable detachable clients.

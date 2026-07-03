@@ -1,0 +1,25 @@
+name: artifact-generation
+version: "1.0"
+description: >
+  Deterministic AgentV gate for static artifact planning. The planner must route
+  artifact requests to create_artifact with the expected artifact kind and file
+  layout, while preserving the regression that plain search prompts do not
+  create artifacts.
+metadata:
+  owner: agent-browser
+  tags: [artifact-generation, tool-selection, deterministic, regression]
+execution:
+  target: agent-browser-artifact-generation
+  timeout_seconds: 10
+assertions:
+  - name: bounded-work
+    type: execution-metrics
+    required: true
+    max_tool_calls: 1
+    max_tokens: 1600
+    max_duration_ms: 250
+  - name: artifact-generation-contract
+    type: code-grader
+    required: true
+    command: ["node", "./graders/artifact-generation-gate.mjs"]
+tests: ./cases.jsonl

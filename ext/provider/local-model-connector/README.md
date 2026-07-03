@@ -1,5 +1,8 @@
 # Local Model Connector
 
+License: MIT
+Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/provider/local-model-connector
+
 Local Model Connector is a Manifest V3 Chrome/Edge extension that lets approved hosted PWAs talk to user-approved local OpenAI-compatible endpoints without asking the local model runtime to configure CORS or Private Network Access headers.
 
 ```text

@@ -165,29 +165,35 @@ export function createDurableTaskRuntime(options: DurableTaskRuntimeOptions): Du
         input: running.input,
       });
       const completedAt = currentTime();
-      const completed = await options.store.updateTask(task.id, () => ({
-        status: 'completed',
-        output,
-        error: null,
-        completedAt,
-        updatedAt: completedAt,
-        lockOwner: null,
-        lockedUntil: null,
-      }));
+      const completed = await options.store.updateTask(task.id, (current) => {
+        if (current.status !== 'running') return current;
+        return {
+          status: 'completed',
+          output,
+          error: null,
+          completedAt,
+          updatedAt: completedAt,
+          lockOwner: null,
+          lockedUntil: null,
+        };
+      });
       if (!completed) throw new Error(`Durable task ${task.id} was not found`);
       await emit();
       return completed;
     } catch (error) {
       const failedAt = currentTime();
       const retryable = running.attemptCount < running.maxAttempts;
-      const failed = await options.store.updateTask(task.id, () => ({
-        status: retryable ? 'queued' : 'failed',
-        error: errorToRecord(error),
-        scheduledFor: retryable ? failedAt + retryDelayMs(running.attemptCount, running) : running.scheduledFor,
-        updatedAt: failedAt,
-        lockOwner: null,
-        lockedUntil: null,
-      }));
+      const failed = await options.store.updateTask(task.id, (current) => {
+        if (current.status !== 'running') return current;
+        return {
+          status: retryable ? 'queued' : 'failed',
+          error: errorToRecord(error),
+          scheduledFor: retryable ? failedAt + retryDelayMs(running.attemptCount, running) : running.scheduledFor,
+          updatedAt: failedAt,
+          lockOwner: null,
+          lockedUntil: null,
+        };
+      });
       if (!failed) throw new Error(`Durable task ${task.id} was not found`);
       await emit();
       return failed;

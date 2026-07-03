@@ -2,6 +2,9 @@
 
 Optional Agent Harness plugin for `AGENTS.md` workspace instruction assets.
 
+License: MIT
+Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/ext/harness/agents-md
+
 `harness-core` no longer recognizes AGENTS.md by default. Hosts that want this
 behavior load this package explicitly:
 

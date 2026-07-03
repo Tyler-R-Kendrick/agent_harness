@@ -127,6 +127,7 @@ function toRegisteredPromptTemplateDefinition(promptTemplate: ModelContextPrompt
 }
 
 type RegistryWithKeys<TDefinition> = {
+  get(key: string): TDefinition | undefined;
   has(key: string): boolean;
   register(definition: TDefinition): void;
   unregister(key: string): boolean;
@@ -155,7 +156,9 @@ function registerDefinition<TDefinition>(
     signal.addEventListener(
       'abort',
       () => {
-        registry.unregister(key);
+        if (registry.get(key) === definition) {
+          registry.unregister(key);
+        }
       },
       { once: true },
     );

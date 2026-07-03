@@ -1,0 +1,24 @@
+{
+  "name": "@agent-harness/harness-otel-export",
+  "version": "0.1.0",
+  "description": "OpenTelemetry SDK/exporter bootstrap for harness-core telemetry (default off; shadow mode)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": ["README.md", "src/**/*.ts", "!src/**/*.test.ts", "!src/__tests__/**"],
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.1",
+    "@opentelemetry/sdk-trace-base": "^2.9.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}

@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { ToolSet } from 'ai';
 import { createStaticToolPlan, type ToolAgentRuntime } from '../../src/tool-agents/tool-agent';
 import type { ToolDescriptor } from '../../src/tools';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const artifactDescriptor: ToolDescriptor = {
   id: 'webmcp:create_artifact',
@@ -58,6 +63,87 @@ function artifactRelevanceScore(prompt: string, kind: string, paths: readonly st
 }
 
 describe('artifact-generation AgentEvals relevance checks', () => {
+  it('declares a real AgentV target and npm runner for artifact-generation checks', async () => {
+    const packageJson = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const targetsYaml = readFileSync(path.resolve(__dirname, '../../../.agentv/targets.yaml'), 'utf8');
+    const evalYaml = readFileSync(path.resolve(__dirname, 'EVAL.yaml'), 'utf8');
+    const evalRunner = await import(
+      pathToFileURL(path.resolve(__dirname, '../../scripts/run-agentv-artifact-generation-eval.mjs')).href
+    ) as {
+      buildAgentvArtifactGenerationEvalCommand: () => { args: string[] };
+    };
+
+    expect(packageJson.scripts['eval:artifact-generation']).toBe('node scripts/run-agentv-artifact-generation-eval.mjs');
+    expect(targetsYaml).toContain('name: agent-browser-artifact-generation');
+    expect(targetsYaml).toContain('artifact-generation-eval-target-runtime.ts');
+    expect(evalYaml).toContain('target: agent-browser-artifact-generation');
+    expect(evalYaml).toContain('type: execution-metrics');
+    expect(evalYaml).toContain('type: code-grader');
+    expect(evalRunner.buildAgentvArtifactGenerationEvalCommand().args).toEqual([
+      'eval',
+      'run',
+      'agent-browser/evals/artifact-generation/EVAL.yaml',
+      '--target',
+      'agent-browser-artifact-generation',
+      '--output',
+      'output/evals/artifact-generation-agentv',
+      '--threshold',
+      '1',
+      '--workers',
+      process.env.AGENT_BROWSER_AGENTV_WORKERS ?? '1',
+    ]);
+  });
+
+  it('keeps the checked-in AgentV cases aligned with the runtime output contract', async () => {
+    const runtimeModule = await import(
+      pathToFileURL(path.resolve(__dirname, '../../scripts/artifact-generation-eval-target-runtime.ts')).href
+    ) as {
+      loadArtifactGenerationCases: () => Promise<Array<{
+        expectedKind?: string;
+        expectedPaths?: string[];
+        expectedSelectedToolIds: string[];
+        expectedStepCount: number;
+        forbiddenSelectedToolIds?: string[];
+        prompt: string;
+        id: string;
+      }>>;
+      runArtifactGenerationEvalCase: (testCase: {
+        expectedKind?: string;
+        expectedPaths?: string[];
+        expectedSelectedToolIds: string[];
+        expectedStepCount: number;
+        forbiddenSelectedToolIds?: string[];
+        prompt: string;
+        id: string;
+      }) => {
+        selectedToolIds: string[];
+        stepCount: number;
+        kind: string | null;
+        filePaths: string[];
+      };
+    };
+    const cases = await runtimeModule.loadArtifactGenerationCases();
+
+    expect(cases).toHaveLength(9);
+
+    for (const evalCase of cases) {
+      const result = runtimeModule.runArtifactGenerationEvalCase(evalCase);
+      expect(result.selectedToolIds).toEqual(evalCase.expectedSelectedToolIds);
+      expect(result.stepCount).toBe(evalCase.expectedStepCount);
+      if (evalCase.expectedKind) {
+        expect(result.kind).toBe(evalCase.expectedKind);
+      }
+      if (evalCase.expectedPaths) {
+        expect(result.filePaths).toEqual(expect.arrayContaining(evalCase.expectedPaths));
+      }
+      for (const forbiddenToolId of evalCase.forbiddenSelectedToolIds ?? []) {
+        expect(result.selectedToolIds).not.toContain(forbiddenToolId);
+      }
+    }
+  });
+
   for (const [prompt, kind, paths] of artifactCases) {
     it(`keeps artifact orchestration relevant for ${kind}`, () => {
       expect(artifactRelevanceScore(prompt, kind, paths)).toBe(1);

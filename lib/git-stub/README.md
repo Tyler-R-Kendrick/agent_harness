@@ -4,6 +4,10 @@
 
 The repository state is stored inside the active session filesystem at `.git-stub/state.json`. It supports local workflow commands such as `git init`, `git status`, `git add`, `git commit`, `git log`, `git diff`, `git branch`, and `git checkout -b` without depending on a native Git binary.
 
+License: MIT
+
+Source: https://github.com/Tyler-R-Kendrick/agent_harness/tree/main/lib/git-stub
+
 ## Package boundary
 
 Use the root package import for all supported runtime APIs:

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { CursorBridge } from './cursorMiddleware';
+import { CursorBridge, createCursorApiMiddleware } from './cursorMiddleware';
 
 function createCursorAgent(events: unknown[]) {
   return {
@@ -98,5 +98,33 @@ describe('CursorBridge', () => {
       prompt: 'Say hello',
       sessionId: 'chat-session-1',
     })).rejects.toThrow('Cursor model "unknown" is not enabled for this environment.');
+  });
+
+  it('returns 400 for malformed JSON chat requests', async () => {
+    const middleware = createCursorApiMiddleware();
+    const req = {
+      method: 'POST',
+      url: '/api/cursor/chat',
+      headers: {},
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from('{"modelId":');
+      },
+    };
+    const res = {
+      statusCode: 0,
+      body: '',
+      setHeader() {},
+      end(value?: string) {
+        this.body = value ?? '';
+      },
+      json() {
+        return JSON.parse(this.body);
+      },
+    };
+
+    await middleware(req as never, res as never, vi.fn());
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toEqual({ error: 'Request body must be valid JSON.' });
   });
 });

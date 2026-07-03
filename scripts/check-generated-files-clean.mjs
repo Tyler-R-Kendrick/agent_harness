@@ -33,12 +33,40 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === 'test-results.xml' || filePath.endsWith('/test-results.xml'),
   },
   {
+    label: '*.har',
+    matches: (filePath) => filePath.endsWith('.har'),
+  },
+  {
+    label: 'trace.zip',
+    matches: (filePath) => filePath === 'trace.zip' || filePath.endsWith('/trace.zip'),
+  },
+  {
     label: '*.tsbuildinfo',
     matches: (filePath) => filePath.endsWith('.tsbuildinfo'),
   },
   {
     label: '*.log',
     matches: (filePath) => filePath.endsWith('.log'),
+  },
+  {
+    label: 'report.*.json',
+    matches: (filePath) => /(?:^|\/)report\.[^/]+\.json$/u.test(filePath),
+  },
+  {
+    label: 'core',
+    matches: (filePath) => filePath === 'core' || filePath.endsWith('/core'),
+  },
+  {
+    label: 'core.[0-9]*',
+    matches: (filePath) => /(?:^|\/)core\.[0-9][^/]*$/u.test(filePath),
+  },
+  {
+    label: '*.dmp',
+    matches: (filePath) => filePath.endsWith('.dmp'),
+  },
+  {
+    label: '*.mdmp',
+    matches: (filePath) => filePath.endsWith('.mdmp'),
   },
   {
     label: '*.tmp',
@@ -141,6 +169,13 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.pnpm-store' || filePath.startsWith('.pnpm-store/'),
   },
   {
+    label: 'node_modules/',
+    matches: (filePath) =>
+      filePath === 'node_modules' ||
+      filePath.startsWith('node_modules/') ||
+      filePath.includes('/node_modules/'),
+  },
+  {
     label: '_cacache/',
     matches: (filePath) => filePath === '_cacache' || filePath.startsWith('_cacache/'),
   },
@@ -177,6 +212,30 @@ export const GENERATED_ARTIFACT_RULES = [
     matches: (filePath) => filePath === '.eslintcache' || filePath.endsWith('/.eslintcache'),
   },
   {
+    label: '*.cpuprofile',
+    matches: (filePath) => filePath.endsWith('.cpuprofile'),
+  },
+  {
+    label: '*.heapprofile',
+    matches: (filePath) => filePath.endsWith('.heapprofile'),
+  },
+  {
+    label: '*.heapsnapshot',
+    matches: (filePath) => filePath.endsWith('.heapsnapshot'),
+  },
+  {
+    label: 'agent-daemon/dist/',
+    matches: (filePath) => filePath === 'agent-daemon/dist' || filePath.startsWith('agent-daemon/dist/'),
+  },
+  {
+    label: 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+    matches: (filePath) => filePath === 'agent-browser/public/downloads/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
+  {
+    label: 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+    matches: (filePath) => filePath === 'ext/worker/local-inference-worker/dist/agent-harness-local-inference-daemon-windows-x64.exe',
+  },
+  {
     label: 'output/',
     matches: (filePath) => filePath === 'output' || filePath.startsWith('output/'),
   },
@@ -211,6 +270,18 @@ export const GENERATED_ARTIFACT_RULES = [
   {
     label: 'ext/provider/local-model-connector/dist/*.map',
     matches: (filePath) => /^ext\/provider\/local-model-connector\/dist\/[^/]+\.map$/u.test(filePath),
+  },
+  {
+    label: '.playwright-mcp/',
+    matches: (filePath) => filePath === '.playwright-mcp' || filePath.startsWith('.playwright-mcp/'),
+  },
+  {
+    label: '.codex-verify-*/',
+    matches: (filePath) => /^\.codex-verify-[^/]+(?:\/|$)/u.test(filePath),
+  },
+  {
+    label: '.tmp-*',
+    matches: (filePath) => /^\.tmp-[^/]+(?:\/|$)/u.test(filePath),
   },
 ];
 

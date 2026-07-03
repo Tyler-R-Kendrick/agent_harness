@@ -13,6 +13,7 @@ describe('sandbox feature flags', () => {
       secureBrowserSandboxExec: false,
       disableWebContainerAdapter: false,
       allowSameOriginForWebContainer: false,
+      mcpClientEnabled: false,
     });
   });
 
@@ -38,10 +39,12 @@ describe('sandbox feature flags', () => {
       VITE_SECURE_BROWSER_SANDBOX_EXEC: 'true',
       VITE_DISABLE_WEBCONTAINER_SANDBOX_ADAPTER: '1',
       VITE_ALLOW_SANDBOX_SAME_ORIGIN: 'yes',
+      VITE_MCP_CLIENT: 'on',
     })).toEqual({
       secureBrowserSandboxExec: true,
       disableWebContainerAdapter: true,
       allowSameOriginForWebContainer: true,
+      mcpClientEnabled: true,
     });
   });
 
@@ -58,6 +61,7 @@ describe('sandbox feature flags', () => {
       secureBrowserSandboxExec: true,
       disableWebContainerAdapter: false,
       allowSameOriginForWebContainer: false,
+      mcpClientEnabled: false,
     });
 
     window.localStorage.removeItem(SANDBOX_RUNTIME_FLAG_OVERRIDES_STORAGE_KEY);

@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Lambda Hermes Agent Reasoning Traces (MarkTechPost tutorial, 2026-05-02)
 
 - Source tutorial: **A Coding Implementation to Parsing, Analyzing, Visualizing, and Fine-Tuning Agent Reasoning Traces Using the lambda/hermes-agent-reasoning-traces Dataset**

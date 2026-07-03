@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Autodata / Agentic Self-Instruct (Meta RAM, 2026)
 
 - Paper/blog title: **Autodata: an automatic data scientist to create high quality data**

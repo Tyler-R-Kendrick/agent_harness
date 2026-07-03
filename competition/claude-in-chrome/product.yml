@@ -1,0 +1,24 @@
+slug: claude-in-chrome
+name: Claude Code with Chrome
+vendor: Anthropic
+segment: model-owner-browser-extension-agent
+product_path: competition/claude-in-chrome
+design_path: competition/claude-in-chrome/design
+features_path: competition/claude-in-chrome/features
+marketing_path: competition/claude-in-chrome/marketing
+gossip_path: competition/claude-in-chrome/gossip
+snapshot_date: 2026-06-08
+primary_sources:
+  - https://code.claude.com/docs/en/chrome
+  - https://support.claude.com/en/articles/12012173-getting-started-with-claude-for-chrome
+  - https://support.claude.com/en/articles/12902405-claude-in-chrome-troubleshooting
+secondary_sources:
+  - https://github.com/anthropics/claude-code/issues/20663
+  - https://github.com/anthropics/claude-code/issues/38783
+  - https://www.reddit.com/r/ClaudeAI/comments/1r3lxpe/official_anthropic_just_released_claude_code_2141/
+  - https://www.reddit.com/r/ClaudeAI/comments/1rcf59l/i_watched_claude_navigate_my_app_find_a_bug_id/
+  - https://www.techradar.com/pro/security/no-clicks-no-permission-prompts-just-visit-a-page-and-an-attacker-completely-controls-your-browser-experts-warn-claude-chrome-extension-could-let-hackers-hijack-your-online-browsing
+positioning: "First-party browser extension that lets Claude Code and Claude Desktop use a visible Chrome session for testing, debugging, form filling, and web data extraction."
+customer_model: "Paid-plan beta available to Claude Pro, Max, Team, and Enterprise users; distribution is bundled into Anthropic's broader Claude Code/Desktop ecosystem."
+competitive_threat_level: high
+notes: "High threat because it is first-party, deeply tied to Claude Code, and makes visible browser control a default coding-agent expectation."

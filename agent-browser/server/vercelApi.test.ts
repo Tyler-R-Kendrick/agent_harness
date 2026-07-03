@@ -5,15 +5,18 @@ function jsonRequest({
   method = 'POST',
   url,
   body,
+  headers,
 }: {
   method?: string;
   url: string;
   body?: unknown;
+  headers?: Record<string, string>;
 }) {
   const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   return {
     method,
     url,
+    headers: headers ?? {},
     async *[Symbol.asyncIterator]() {
       for (const chunk of chunks) yield chunk;
     },
@@ -181,6 +184,24 @@ describe('Vercel web search API functions', () => {
       url: 'https://example.com/theaters',
       entities: [expect.objectContaining({ name: 'AMC Randhurst 12' })],
     });
+  });
+
+  it('returns 413 for oversized deployed /api/web-search JSON requests', async () => {
+    const { createWebSearchApiHandler } = await import('../../api/web-search');
+    const search = vi.fn();
+    const handler = createWebSearchApiHandler({ search });
+    const req = jsonRequest({
+      url: '/api/web-search',
+      body: { query: 'movie theaters near Arlington Heights IL', limit: 3 },
+      headers: { 'content-length': '1000001' },
+    });
+    const res = jsonResponse();
+
+    await handler(req as never, res as never);
+
+    expect(res.statusCode).toBe(413);
+    expect(search).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ error: 'Request body exceeds 1000000 bytes.' });
   });
 
   it('extracts page text and entities from the deployed web-page runtime', async () => {

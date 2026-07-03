@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Modular Skill-Based Agent System with Dynamic Tool Routing (MarkTechPost, 2026-05-05)
 
 - Source article: **Build a Modular Skill-Based Agent System for LLMs with Dynamic Tool Routing in Python**

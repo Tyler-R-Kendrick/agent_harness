@@ -11,15 +11,18 @@ function jsonRequest({
   method = 'POST',
   url,
   body,
+  headers,
 }: {
   method?: string;
   url: string;
   body?: unknown;
+  headers?: Record<string, string>;
 }) {
   const chunks = body === undefined ? [] : [Buffer.from(JSON.stringify(body))];
   return {
     method,
     url,
+    headers: headers ?? {},
     async *[Symbol.asyncIterator]() {
       for (const chunk of chunks) yield chunk;
     },
@@ -307,6 +310,23 @@ describe('createSearchApiMiddleware', () => {
     expect(res.statusCode).toBe(200);
     expect(search).toHaveBeenCalledWith({ query: 'best theaters Arlington Heights IL', limit: 2 });
     expect(res.json()).toMatchObject({ status: 'found' });
+  });
+
+  it('rejects oversized JSON search requests before dispatching the bridge', async () => {
+    const search = vi.fn();
+    const middleware = createSearchApiMiddleware({ search } as unknown as WebSearchBridge);
+    const req = jsonRequest({
+      url: '/api/web-search',
+      body: { query: 'best theaters Arlington Heights IL', limit: 3 },
+      headers: { 'content-length': '1000001' },
+    });
+    const res = jsonResponse();
+
+    await middleware(req as never, res as never, vi.fn());
+
+    expect(res.statusCode).toBe(413);
+    expect(search).not.toHaveBeenCalled();
+    expect(res.json()).toEqual({ error: 'Request body exceeds 1000000 bytes.' });
   });
 });
 
@@ -643,6 +663,51 @@ describe('WebPageBridge', () => {
       observations: [],
     });
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('blocks hostnames that resolve to private addresses before fetching', async () => {
+    const fetchImpl = vi.fn();
+    const lookupImpl = vi.fn(async () => [{ address: '127.0.0.1', family: 4 }]);
+    const bridge = new WebPageBridge(fetchImpl, 10_000, lookupImpl);
+
+    await expect(bridge.read({ url: 'https://docs.example.test/article' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'https://docs.example.test/article',
+      reason: 'Web page URL must not resolve to a private address.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(lookupImpl).toHaveBeenCalledWith('docs.example.test', { all: true, verbatim: true });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('blocks redirects that hop from a public host to a private address', async () => {
+    const fetchImpl = vi.fn(async () => new Response('', {
+      status: 302,
+      headers: { location: 'http://127.0.0.1:4173/private' },
+    }));
+    const lookupImpl = vi.fn(async () => [{ address: '93.184.216.34', family: 4 }]);
+    const bridge = new WebPageBridge(fetchImpl, 10_000, lookupImpl);
+
+    await expect(bridge.read({ url: 'https://example.com/redirect' })).resolves.toEqual({
+      status: 'blocked',
+      url: 'http://127.0.0.1:4173/private',
+      reason: 'Web page URL must target a public web host.',
+      links: [],
+      jsonLd: [],
+      entities: [],
+      observations: [],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://example.com/redirect',
+      expect.objectContaining({
+        headers: expect.any(Object),
+        redirect: 'manual',
+      }),
+    );
   });
 
   it('returns unavailable instead of hanging when a page read does not respond', async () => {

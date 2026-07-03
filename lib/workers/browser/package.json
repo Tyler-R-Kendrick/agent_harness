@@ -2,6 +2,7 @@
   "name": "@agent-harness/worker-browser",
   "version": "0.1.0",
   "description": "Browser orchestration worker provider for agent_harness",
+  "license": "MIT",
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
