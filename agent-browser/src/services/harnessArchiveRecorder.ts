@@ -23,12 +23,14 @@ export function createHarnessEvolutionGenomeInput(
   const definition = [
     plan.summary,
     JSON.stringify({
+      enabled: plan.enabled,
       componentId: plan.componentId,
       sandboxId: plan.sandboxId,
       sandboxPath: plan.sandboxPath,
       patchPackageCommand: plan.patchPackageCommand,
       validationCommands: plan.validationCommands,
       adoptionGate: plan.adoptionGate,
+      fallbackActions: plan.fallbackActions,
       protectedScopes: plan.protectedScopes,
       visualValidationRequired: plan.visualValidationRequired,
     }),
@@ -57,7 +59,8 @@ export async function recordHarnessEvolutionGenome(
 ): Promise<HarnessGenome | undefined> {
   try {
     return await archive.record(createHarnessEvolutionGenomeInput(plan, options));
-  } catch {
+  } catch (error) {
+    console.error('recordHarnessEvolutionGenome: failed', error);
     return undefined;
   }
 }

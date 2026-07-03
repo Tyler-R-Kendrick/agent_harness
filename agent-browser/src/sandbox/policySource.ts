@@ -35,7 +35,8 @@ export async function resolveSandboxPolicyFromFs(
     const raw = await options.reader.readFile(path);
     const text = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
     return compileSandboxPolicy(parseSandboxPolicy(text, { format: 'auto' }));
-  } catch {
+  } catch (err) {
+    console.warn(`[sandbox-policy] failed to load policy from "${path}"; using defaults.`, err);
     return undefined;
   }
 }

@@ -296,6 +296,11 @@ class AgentSandboxSession implements SandboxSession {
 
 export function createSandboxExecutionService(options: SandboxedExecutionServiceOptions = {}): SandboxedExecutionService {
   const flags = options.flags ?? getSandboxFeatureFlags();
+  if (options.policy?.unsupportedDirectives?.length) {
+    console.warn(
+      `[sandbox-policy] policy contains directives not enforced by the browser sandbox: ${options.policy.unsupportedDirectives.join(', ')}`,
+    );
+  }
   const createSecureSession = (): SandboxSession => {
     if (options.createIframeSession) {
       return options.createIframeSession({ flags });

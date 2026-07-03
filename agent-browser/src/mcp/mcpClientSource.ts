@@ -55,7 +55,8 @@ export async function resolveMcpServersFromFs(
     const raw = await options.reader.readFile(path);
     const text = typeof raw === 'string' ? raw : new TextDecoder().decode(raw);
     return toServerConfigs(JSON.parse(text));
-  } catch {
+  } catch (err) {
+    console.warn(`[mcp-client] failed to load MCP servers from "${path}"; using none.`, err);
     return [];
   }
 }
@@ -87,12 +88,18 @@ export async function mountMcpClientShadow(
   try {
     const bridgeFactory = options.bridgeFactory ?? createMcpClientToolBridge;
     const bridge = bridgeFactory({ servers: options.servers });
-    await bridge.connect();
-    const descriptors = bridge.getDescriptors();
-    for (const descriptor of descriptors) {
-      log(`Phase 1 shadow MCP tool discovered: ${descriptor.id} (server ${descriptor.serverId})`);
+    try {
+      await bridge.connect();
+      const descriptors = bridge.getDescriptors();
+      for (const descriptor of descriptors) {
+        log(`Phase 1 shadow MCP tool discovered: ${descriptor.id} (server ${descriptor.serverId})`);
+      }
+      return descriptors;
+    } finally {
+      // Log-only shadow: descriptors are captured above and never used live, so
+      // close the bridge immediately to release transports and avoid leaks.
+      await bridge.close();
     }
-    return descriptors;
   } catch {
     return [];
   }

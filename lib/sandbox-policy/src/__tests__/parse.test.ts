@@ -163,6 +163,10 @@ describe('parseSandboxPolicy network validation', () => {
   it('accepts an empty network object (all fields absent)', () => {
     expect(parseSandboxPolicy('{"network":{}}', { format: 'json' })).toEqual({ network: {} });
   });
+
+  it('rejects an unknown network key', () => {
+    expect(() => parseSandboxPolicy('{"network":{"bogus":true}}', { format: 'json' })).toThrow('Sandbox policy network has an unknown key "bogus".');
+  });
 });
 
 describe('parseSandboxPolicy limits, storage, dom, enforcement validation', () => {
@@ -176,6 +180,10 @@ describe('parseSandboxPolicy limits, storage, dom, enforcement validation', () =
 
   it('accepts an empty limits object (all fields absent)', () => {
     expect(parseSandboxPolicy('{"limits":{}}', { format: 'json' })).toEqual({ limits: {} });
+  });
+
+  it('rejects an unknown limits key', () => {
+    expect(() => parseSandboxPolicy('{"limits":{"bogus":1}}', { format: 'json' })).toThrow('Sandbox policy limits has an unknown key "bogus".');
   });
 
   it('accepts storage "none"', () => {

@@ -20,6 +20,17 @@ type UnknownRecord = Record<string, unknown>;
 
 const KNOWN_KEYS = new Set<string>(['network', 'limits', 'storage', 'dom', 'enforcement']);
 
+const KNOWN_NETWORK_KEYS = new Set<string>([
+  'allow',
+  'allowedOrigins',
+  'allowedMethods',
+  'allowLocalhostHttp',
+  'policy',
+  'maxRequestBytes',
+  'maxResponseBytes',
+  'timeoutMs',
+]);
+
 const LIMIT_FIELDS = [
   'maxRuntimeMs',
   'maxStdoutBytes',
@@ -92,6 +103,12 @@ function validateNetwork(value: unknown): SandboxPolicyNetwork {
     throw new Error('Sandbox policy network must be an object.');
   }
 
+  for (const key of Object.keys(value)) {
+    if (!KNOWN_NETWORK_KEYS.has(key)) {
+      throw new Error(`Sandbox policy network has an unknown key "${key}".`);
+    }
+  }
+
   const network: SandboxPolicyNetwork = {};
 
   if (value.allow !== undefined) {
@@ -140,6 +157,13 @@ function validateNetwork(value: unknown): SandboxPolicyNetwork {
 function validateLimits(value: unknown): SandboxPolicyLimits {
   if (!isRecord(value)) {
     throw new Error('Sandbox policy limits must be an object.');
+  }
+
+  const knownLimitFields = new Set<string>(LIMIT_FIELDS);
+  for (const key of Object.keys(value)) {
+    if (!knownLimitFields.has(key)) {
+      throw new Error(`Sandbox policy limits has an unknown key "${key}".`);
+    }
   }
 
   const limits: SandboxPolicyLimits = {};

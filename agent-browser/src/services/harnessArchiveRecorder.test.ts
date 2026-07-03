@@ -22,6 +22,9 @@ describe('createHarnessEvolutionGenomeInput', () => {
     expect(input.definition).toContain(plan.summary);
     expect(input.definition).toContain(plan.componentId);
     expect(input.definition).toContain(plan.sandboxPath);
+    expect(input.definition).toContain(`"enabled":${plan.enabled}`);
+    expect(input.definition).toContain('"fallbackActions"');
+    expect(input.definition).toContain(plan.fallbackActions[0]);
     expect(input.scores).toEqual({ quality: 0, cost: 0 });
     expect(input.parentId).toBeNull();
     expect(input.generation).toBe(0);

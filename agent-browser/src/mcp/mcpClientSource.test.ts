@@ -4,11 +4,16 @@ import type {
   McpServerConfig,
   McpToolDescriptor,
 } from '@agent-harness/mcp-client';
+import { createMcpClientToolBridge } from '@agent-harness/mcp-client';
 import {
   DEFAULT_MCP_SERVERS_PATH,
   mountMcpClientShadow,
   resolveMcpServersFromFs,
 } from './mcpClientSource';
+
+vi.mock('@agent-harness/mcp-client', () => ({
+  createMcpClientToolBridge: vi.fn(),
+}));
 
 const VALID_OBJECT_JSON = JSON.stringify({
   servers: [
@@ -81,6 +86,14 @@ describe('resolveMcpServersFromFs', () => {
     expect(result.map((server) => server.id)).toEqual(['ok']);
   });
 
+  it('returns [] for valid JSON that is neither an array nor { servers: [...] }', async () => {
+    const result = await resolveMcpServersFromFs({
+      enabled: true,
+      reader: { readFile: () => JSON.stringify({ foo: 'bar' }) },
+    });
+    expect(result).toEqual([]);
+  });
+
   it('fails open to [] when the reader throws (missing file)', async () => {
     const result = await resolveMcpServersFromFs({
       enabled: true,
@@ -106,10 +119,11 @@ describe('mountMcpClientShadow', () => {
     expect(bridgeFactory).not.toHaveBeenCalled();
   });
 
-  it('connects via the injected bridge factory, logs discovered descriptors, and returns them', async () => {
+  it('connects via the injected bridge factory, logs discovered descriptors, returns them, and closes the bridge', async () => {
     const descriptors = [descriptor('mcp:alpha', 'server-1'), descriptor('mcp:beta', 'server-1')];
     const connect = vi.fn(async () => undefined);
     const getDescriptors = vi.fn(() => descriptors);
+    const close = vi.fn(async () => undefined);
     const bridgeFactory = vi.fn((options: McpClientToolBridgeOptions) => {
       expect(options.servers.map((server) => server.id)).toEqual(['server-1']);
       return {
@@ -117,7 +131,7 @@ describe('mountMcpClientShadow', () => {
         getDescriptors,
         createToolSet: () => ({}),
         subscribe: () => () => undefined,
-        close: async () => undefined,
+        close,
       };
     });
     const messages: string[] = [];
@@ -130,10 +144,28 @@ describe('mountMcpClientShadow', () => {
     });
 
     expect(connect).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
     expect(result).toEqual(descriptors);
     expect(messages).toHaveLength(2);
     expect(messages[0]).toContain('mcp:alpha');
     expect(messages[1]).toContain('mcp:beta');
+  });
+
+  it('falls back to the real createMcpClientToolBridge when no bridgeFactory is given and closes it', async () => {
+    const close = vi.fn(async () => undefined);
+    vi.mocked(createMcpClientToolBridge).mockReturnValue({
+      connect: async () => undefined,
+      getDescriptors: () => [],
+      createToolSet: () => ({}),
+      subscribe: () => () => undefined,
+      close,
+    });
+
+    const result = await mountMcpClientShadow({ servers: [{ id: 'server-1' }] });
+
+    expect(createMcpClientToolBridge).toHaveBeenCalledWith({ servers: [{ id: 'server-1' }] });
+    expect(close).toHaveBeenCalledOnce();
+    expect(result).toEqual([]);
   });
 
   it('swallows bridge errors and resolves to []', async () => {
