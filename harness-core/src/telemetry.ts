@@ -62,6 +62,23 @@ export function setHarnessTelemetryReward(span: Span, reward: HarnessTelemetryRe
   });
 }
 
+/**
+ * Attach a reward slot to the currently-active span, if one is recording.
+ *
+ * Returns `true` when a reward was recorded, `false` when there is no active
+ * span (a no-op). This lets graders that run outside an explicit span emit a
+ * reward when they happen to run within one, without threading a span handle
+ * through call sites. Phase 1 shadow-compatible: additive attributes only.
+ */
+export function recordActiveHarnessReward(reward: HarnessTelemetryReward): boolean {
+  const span = trace.getActiveSpan();
+  if (!span) {
+    return false;
+  }
+  setHarnessTelemetryReward(span, reward);
+  return true;
+}
+
 export function toHarnessTelemetryError(caught: unknown): Error {
   return caught instanceof Error ? caught : new Error(String(caught));
 }

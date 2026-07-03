@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@agent-harness/agent-sandbox": "0.1.0",
+    "@agent-harness/sandbox-policy": "0.1.0",
     "@agent-harness/ext-agent-skills": "0.1.0",
     "@agent-harness/ext-agents-md": "0.1.0",
     "@agent-harness/ext-artifacts": "0.1.0",
@@ -52,7 +53,9 @@
     "@agent-harness/ext-local-model-connector": "0.1.0",
     "@agent-harness/ext-workflow-canvas": "0.1.0",
     "@agent-harness/git-stub": "0.1.0",
+    "@agent-harness/harness-archive": "0.1.0",
     "@agent-harness/logact-loop": "0.1.0",
+    "@agent-harness/mcp-client": "0.1.0",
     "@agent-harness/prompt-budget": "0.1.0",
     "@agent-harness/search-answering": "0.1.0",
     "@agent-harness/task-manager": "0.1.0",

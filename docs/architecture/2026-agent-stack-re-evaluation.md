@@ -123,7 +123,14 @@ Cross-subsystem sequencing: observability lands before self-improvement (the
 loop needs traces and gates); the DSL spec lands before intent-mode defaults;
 protocol adoption is independent.
 
-### Phase 0 — shadow / record-only
+> **Delivery status:** Phase 0 and Phase 1 are delivered across every ADR with
+> an enforceable browser-tier surface; Phase 2 default-flips are gated on named
+> integration/data-source blockers rather than forced prematurely. See the live
+> ledger — [`2026-migration-status.md`](./2026-migration-status.md) — for the
+> per-ADR shadow/opt-in/core-default state and the exact seam that unblocks each
+> remaining flip.
+
+### Phase 0 — shadow / record-only ✅ delivered
 
 - Create the standards files specified in `standards-adoption.md`
   (SCAFFOLD.md, MEMORY.md, STEERING.md, auth.md; OKF knowledge folder).
@@ -134,7 +141,7 @@ protocol adoption is independent.
 - Record symphony evolution runs into the harness archive with lineage; no
   gating yet.
 
-### Phase 1 — opt-in enforce
+### Phase 1 — opt-in enforce ✅ delivered
 
 - llguidance constraining at DSL emission points behind `intent.mode=enforce`.
 - WDK-compatible durable adapter opt-in per workflow.
@@ -142,14 +149,25 @@ protocol adoption is independent.
 - A2A endpoint opt-in; OpenShell-style YAML policies compiled to the existing
   sandbox adapters.
 
-### Phase 2 — core-default
+### Phase 2 — core-default ⟳ gated on named blockers
 
-- Intent DSL default for harness-generation tasks.
-- Router-over-pool single endpoint default.
-- Durable event-sourced workflows default, with GraphQL read models.
+Reached: observability reward emission (additive, unconditional). The remaining
+default-flips are gated — each is opt-in today with a named unblock seam in the
+[migration status ledger](./2026-migration-status.md); they are not forced on
+until their data source/integration exists, per the shadow → opt-in →
+core-default discipline.
+
+- Intent DSL default for harness-generation tasks. *(gated: needs `intent.mode`
+  config + `llguidance-wasm` wiring + live HookRegistry registration.)*
+- Router-over-pool single endpoint default. *(gated: Ornith/local tier is an
+  inert stub; needs a real, eval-validated model pool.)*
+- Durable event-sourced workflows default, with GraphQL read models. *(gated:
+  adapter unwired; suspend/resume soak; GraphQL read models are server-tier.)*
 - Self-improvement loop continuously running under clade-metaproductivity
-  gating.
+  gating. *(gated: eval-gate + lifecycle unwired into the live skill registry;
+  clade gating not built.)*
 - App.tsx decomposition executed against the nanoservice hosting contract.
+  *(not started: large refactor, sequenced after the integration seams above.)*
 
 ## Techniques radar (documented, no packets)
 

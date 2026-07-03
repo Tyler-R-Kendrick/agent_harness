@@ -1,4 +1,5 @@
 import { BrowserSandboxProvider, WebContainerBrowserSandboxProvider, type SkillSandbox } from '@agent-harness/agent-sandbox';
+import type { CompiledSandboxPolicy } from '@agent-harness/sandbox-policy';
 import { getSandboxFeatureFlags, type SandboxFeatureFlags } from '../features/flags';
 import { SandboxBootstrapError, type IframeSandboxSessionOptions } from './iframe-session';
 import { persistArtifactsToVirtualFileSystem, type WritableVirtualFileSystem } from './persist';
@@ -58,6 +59,13 @@ export interface SandboxedExecutionServiceOptions {
   createIframeSession?: (options: IframeSandboxSessionOptions) => SandboxSession;
   createLegacySession?: () => Promise<LegacyExecutionSession> | LegacyExecutionSession;
   persistenceTarget?: WritableVirtualFileSystem;
+  /**
+   * Phase 1 opt-in: a compiled OpenShell-style sandbox policy. When present, its
+   * `browserOptions` (network origins/methods, byte and timeout caps) configure
+   * the default browser sandbox provider. When absent (the default), the
+   * adapter uses its built-in defaults, so behavior is unchanged.
+   */
+  policy?: CompiledSandboxPolicy;
 }
 
 type AgentSandboxRuntime = 'quickjs' | 'webcontainer';
@@ -288,6 +296,11 @@ class AgentSandboxSession implements SandboxSession {
 
 export function createSandboxExecutionService(options: SandboxedExecutionServiceOptions = {}): SandboxedExecutionService {
   const flags = options.flags ?? getSandboxFeatureFlags();
+  if (options.policy?.unsupportedDirectives?.length) {
+    console.warn(
+      `[sandbox-policy] policy contains directives not enforced by the browser sandbox: ${options.policy.unsupportedDirectives.join(', ')}`,
+    );
+  }
   const createSecureSession = (): SandboxSession => {
     if (options.createIframeSession) {
       return options.createIframeSession({ flags });
@@ -300,7 +313,7 @@ export function createSandboxExecutionService(options: SandboxedExecutionService
         }
         return runtime === 'webcontainer'
           ? new WebContainerBrowserSandboxProvider()
-          : new BrowserSandboxProvider();
+          : new BrowserSandboxProvider(options.policy?.browserOptions);
       },
     });
   };

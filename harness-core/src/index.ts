@@ -209,6 +209,7 @@ export {
 export {
   HARNESS_OTEL_TRACER_NAME,
   HARNESS_OTEL_TRACER_VERSION,
+  recordActiveHarnessReward,
   setHarnessTelemetryAttributes,
   setHarnessTelemetryReward,
   toHarnessTelemetryError,

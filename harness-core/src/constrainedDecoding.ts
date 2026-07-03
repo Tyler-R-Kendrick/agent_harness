@@ -207,6 +207,14 @@ export async function resolveGuidanceTsGrammar(
     return resolveGuidanceTsGrammarFromHooks(decoding, options);
   }
 
+  if (isConstrainedDecoding(decoding) && decoding.kind === 'lark') {
+    const resolved = await tryResolveGuidanceTsGrammarFromHooks(decoding, options);
+    if (resolved) {
+      return resolved;
+    }
+    return toGuidanceTsGrammar(decoding);
+  }
+
   if (
     isConstrainedDecoding(decoding)
     && decoding.kind === 'zod'
@@ -300,6 +308,14 @@ export async function decodeConstrainedOutputWithHooks<TDecoded>(
     return (decoding.schema as ZodLikeSchema<TDecoded>).parse(decoded);
   }
 
+  if (decoding.kind === 'lark') {
+    const decoded = await tryDecodeConstrainedOutputFromHooks(text, decoding, options);
+    if (decoded !== CONSTRAINED_DECODE_UNRESOLVED) {
+      return decoded;
+    }
+    return decodeConstrainedOutput(text, decoding);
+  }
+
   return decodeConstrainedOutput(text, decoding);
 }
 
@@ -362,10 +378,10 @@ function resolveZodJsonSchema<TSchema>(
   }
 }
 
-async function resolveGuidanceTsGrammarFromHooks(
+async function tryResolveGuidanceTsGrammarFromHooks(
   decoding: ConstrainedDecoding,
   options: GuidanceGrammarResolutionOptions,
-): Promise<GuidanceTsGrammar> {
+): Promise<GuidanceTsGrammar | undefined> {
   const result = await options.hooks?.runPipes<ConstrainedOutputGrammarHookPayload>(
     CONSTRAINED_DECODING_GRAMMAR_HOOK_POINT,
     { decoding },
@@ -373,6 +389,17 @@ async function resolveGuidanceTsGrammarFromHooks(
   );
   if (result?.payload.grammar) {
     return toGuidanceTsGrammar(result.payload.grammar);
+  }
+  return undefined;
+}
+
+async function resolveGuidanceTsGrammarFromHooks(
+  decoding: ConstrainedDecoding,
+  options: GuidanceGrammarResolutionOptions,
+): Promise<GuidanceTsGrammar> {
+  const resolved = await tryResolveGuidanceTsGrammarFromHooks(decoding, options);
+  if (resolved) {
+    return resolved;
   }
   throw new Error(`No constrained decoding hook resolved ${decoding.kind}.`);
 }
@@ -393,9 +420,11 @@ function decodeToonOutput<TDecoded>(
   throw new Error('No constrained decoding hook resolved toon output.');
 }
 
-async function decodeConstrainedOutputFromHooks<TDecoded>(
+const CONSTRAINED_DECODE_UNRESOLVED = Symbol('constrained-decode-unresolved');
+
+async function tryDecodeConstrainedOutputFromHooks<TDecoded>(
   text: string,
-  decoding: ToonConstrainedDecoding<TDecoded>,
+  decoding: ConstrainedDecoding<TDecoded>,
   options: GuidanceGrammarResolutionOptions,
 ): Promise<TDecoded | unknown> {
   const result = await options.hooks?.runPipes<ConstrainedOutputDecodeHookPayload<TDecoded>>(
@@ -405,6 +434,18 @@ async function decodeConstrainedOutputFromHooks<TDecoded>(
   );
   if (result && Object.prototype.hasOwnProperty.call(result.payload, 'decoded')) {
     return result.payload.decoded;
+  }
+  return CONSTRAINED_DECODE_UNRESOLVED;
+}
+
+async function decodeConstrainedOutputFromHooks<TDecoded>(
+  text: string,
+  decoding: ToonConstrainedDecoding<TDecoded>,
+  options: GuidanceGrammarResolutionOptions,
+): Promise<TDecoded | unknown> {
+  const decoded = await tryDecodeConstrainedOutputFromHooks(text, decoding, options);
+  if (decoded !== CONSTRAINED_DECODE_UNRESOLVED) {
+    return decoded;
   }
   throw new Error('No constrained decoding hook resolved toon output.');
 }

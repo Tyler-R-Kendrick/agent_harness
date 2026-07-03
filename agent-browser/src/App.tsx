@@ -295,6 +295,8 @@ import {
 } from './services/sessionFsPath';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
+import { resolveSandboxPolicyFromFs } from './sandbox/policySource';
+import { mountMcpClientShadow, resolveMcpServersFromFs } from './mcp/mcpClientSource';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
   createMessageCopyLabel,
@@ -3700,6 +3702,27 @@ function ChatPanel({
     onTerminalFsPathsChanged(activeSessionId, bash.fs.getAllPaths());
   }, [activeSessionId, getSessionBash, onTerminalFsPathsChanged]);
 
+  // Phase 1 shadow: log-only, not merged into the active tools/selectToolsByIds set.
+  useEffect(() => {
+    if (!sandboxFlags.mcpClientEnabled || !activeSessionId) return;
+    let cancelled = false;
+    void (async () => {
+      const bash = getSessionBash(activeSessionId);
+      const servers = await resolveMcpServersFromFs({
+        enabled: sandboxFlags.mcpClientEnabled,
+        reader: bash.fs,
+      });
+      if (cancelled) return;
+      await mountMcpClientShadow({
+        servers,
+        logger: (message) => console.info(`[agent-browser:mcp-shadow] ${message}`),
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, getSessionBash, sandboxFlags.mcpClientEnabled]);
+
   useEffect(() => {
     if (showBash) {
       terminalInputRef.current?.focus();
@@ -4101,8 +4124,13 @@ function ChatPanel({
     }
 
     const bash = getSessionBash(activeSessionId);
+    const sandboxPolicy = await resolveSandboxPolicyFromFs({
+      enabled: sandboxFlags.sandboxPolicyEnabled,
+      reader: bash.fs,
+    });
     const service = createSandboxExecutionService({
       flags: sandboxFlags,
+      policy: sandboxPolicy,
       persistenceTarget: {
         mkdir: (path, options) => bash.fs.mkdir(path, options),
         writeFile: (path, content, encoding) => bash.fs.writeFile(path, content, encoding ?? 'utf-8'),
@@ -4263,6 +4291,16 @@ function ChatPanel({
         if (routedLocalModel) {
           requestCodiModelId = routed.modelId;
           requestLocalModel = routedLocalModel;
+        }
+      } else if (routed.provider === 'local') {
+        // Phase 1: local/Ornith tier — model source is ext/provider/local-model-connector (catalog pending).
+        // Routed analogously to the 'codi' branch onto the local runtime path; inert today because
+        // buildBenchmarkRoutingCandidates emits no local candidates without a localModels catalog.
+        const routedLocalModel = installedModels.find((model) => model.id === routed.modelId);
+        if (routedLocalModel) {
+          requestCodiModelId = routed.modelId;
+          requestLocalModel = routedLocalModel;
+          runtimeProviderForRequest = 'codi';
         }
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
@@ -15987,6 +16025,10 @@ function AgentBrowserApp() {
       touchesStyling: true,
     },
   }), [activeWorkspace.name, harnessEvolutionSettings]);
+  // Phase 1: opt-in archive recording attaches here — a guarded
+  // recordHarnessEvolutionGenome(archive, settingsHarnessEvolutionPlan) call
+  // (from ./services/harnessArchiveRecorder) once a workspace-scoped
+  // HarnessArchive is threaded through. Record-only, never gates evolution.
   const activeMultitaskSubagentState = useMemo(
     () => {
       const storedWorkspaceState = multitaskSubagentStateByWorkspace[activeWorkspaceId];

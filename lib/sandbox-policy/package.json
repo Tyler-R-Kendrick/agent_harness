@@ -1,0 +1,30 @@
+{
+  "name": "@agent-harness/sandbox-policy",
+  "version": "0.1.0",
+  "description": "OpenShell-style sandbox policy: parse YAML/JSON and compile to browser sandbox adapter options (Phase 1 opt-in)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "README.md",
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "!src/__tests__/**"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node ../../scripts/run-package-bin.mjs vitest run",
+    "test:watch": "node ../../scripts/run-package-bin.mjs vitest",
+    "test:coverage": "node ../../scripts/run-package-bin.mjs vitest run --coverage"
+  },
+  "dependencies": {
+    "yaml": "^2.5.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "typescript": "^5.4.0",
+    "vitest": "^4.1.5"
+  }
+}
