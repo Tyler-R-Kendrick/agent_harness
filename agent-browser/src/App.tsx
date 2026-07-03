@@ -4292,6 +4292,16 @@ function ChatPanel({
           requestCodiModelId = routed.modelId;
           requestLocalModel = routedLocalModel;
         }
+      } else if (routed.provider === 'local') {
+        // Phase 1: local/Ornith tier — model source is ext/provider/local-model-connector (catalog pending).
+        // Routed analogously to the 'codi' branch onto the local runtime path; inert today because
+        // buildBenchmarkRoutingCandidates emits no local candidates without a localModels catalog.
+        const routedLocalModel = installedModels.find((model) => model.id === routed.modelId);
+        if (routedLocalModel) {
+          requestCodiModelId = routed.modelId;
+          requestLocalModel = routedLocalModel;
+          runtimeProviderForRequest = 'codi';
+        }
       }
     } else if (requestBenchmarkRoute && benchmarkRoutingSettings.enabled && benchmarkRoutingSettings.routerMode === 'shadow') {
       appendSharedMessages([{

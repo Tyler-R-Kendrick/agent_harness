@@ -5,8 +5,26 @@ import { classifyPrompt, type ClassifiedPrompt } from './requestComplexityRoutin
 
 export type BenchmarkTaskClassId = 'planning' | 'browser-action' | 'verification' | 'research' | 'review';
 export type BenchmarkRoutingObjective = 'balanced' | 'quality' | 'cost' | 'latency';
-export type BenchmarkModelProvider = 'ghcp' | 'codi';
+// 'local' is the local/Ornith (ollama-style) runtime tier sourced from
+// ext/provider/local-model-connector. Its model catalog is still pending, so
+// buildBenchmarkRoutingCandidates only emits `local:<id>` candidates when
+// localModels are supplied — see buildBenchmarkRoutingCandidates below.
+export type BenchmarkModelProvider = 'ghcp' | 'codi' | 'local';
 export type BenchmarkModelRef = `${BenchmarkModelProvider}:${string}`;
+
+/**
+ * Minimal shape describing a local/Ornith runtime model, mirroring the fields
+ * of the installed (`HFModel`) catalog that routing scoring relies on. The live
+ * catalog will come from ext/provider/local-model-connector once it publishes a
+ * model list; until then callers omit `localModels` and no local candidates are
+ * produced.
+ */
+export type BenchmarkLocalModel = {
+  id: string;
+  label?: string;
+  task?: string;
+  sizeMB?: number;
+};
 
 export type BenchmarkTaskClass = {
   id: BenchmarkTaskClassId;
@@ -14,6 +32,12 @@ export type BenchmarkTaskClass = {
   description: string;
 };
 
+// NOTE (Phase 1 deferral): these settings — including the `routerMode` enforce
+// toggle — are currently persisted globally via
+// STORAGE_KEYS.benchmarkModelRoutingSettings. Per-workspace keying of the
+// enforce toggle (e.g. keying the stored value by workspace id) is the remaining
+// step and is intentionally NOT refactored here to avoid touching the
+// persistence layer in this chunk.
 export type BenchmarkRoutingSettings = {
   enabled: boolean;
   routerMode: 'off' | 'shadow' | 'enforce';
@@ -377,12 +401,33 @@ function localEvidence(model: HFModel): Omit<BenchmarkRoutingCandidate, 'ref' | 
   };
 }
 
+function localOrnithEvidence(model: BenchmarkLocalModel): Omit<BenchmarkRoutingCandidate, 'ref' | 'provider' | 'modelId' | 'label'> {
+  const sizeMb = typeof model.sizeMB === 'number' ? model.sizeMB : 1024;
+  const isSmall = sizeMb <= 1200;
+  const isTextGeneration = model.task === undefined || model.task === 'text-generation';
+  return {
+    evidenceSource: 'Local/Ornith tier seed: offline runtime inference metadata',
+    qualityByTask: scoreVector({
+      planning: isTextGeneration ? 48 : 38,
+      'browser-action': isTextGeneration ? 42 : 34,
+      verification: isTextGeneration ? 52 : 40,
+      research: isTextGeneration ? 46 : 36,
+      review: isTextGeneration ? 50 : 38,
+    }, 42),
+    costTier: 1,
+    latencyTier: isSmall ? 2 : 4,
+    strengths: ['offline', 'private', isSmall ? 'fast local loop' : 'local large model'],
+  };
+}
+
 export function buildBenchmarkRoutingCandidates({
   copilotModels,
   installedModels,
+  localModels = [],
 }: {
   copilotModels: CopilotModelSummary[];
   installedModels: HFModel[];
+  localModels?: BenchmarkLocalModel[];
 }): BenchmarkRoutingCandidate[] {
   const ghcpCandidates = copilotModels.map((model): BenchmarkRoutingCandidate => ({
     ref: toModelRef('ghcp', model.id),
@@ -402,7 +447,17 @@ export function buildBenchmarkRoutingCandidates({
       ...localEvidence(model),
     }));
 
-  return [...ghcpCandidates, ...codiCandidates];
+  // Local/Ornith tier: absent/empty by default (no live catalog yet), so this
+  // adds no candidates and enforce routing can never select `local` today.
+  const localCandidates = localModels.map((model): BenchmarkRoutingCandidate => ({
+    ref: toModelRef('local', model.id),
+    provider: 'local',
+    modelId: model.id,
+    label: model.label ?? model.id,
+    ...localOrnithEvidence(model),
+  }));
+
+  return [...ghcpCandidates, ...codiCandidates, ...localCandidates];
 }
 
 async function defaultFetchJson(url: string, options?: { signal?: AbortSignal }): Promise<unknown> {
@@ -872,7 +927,7 @@ function isBenchmarkModelRef(value: unknown): value is BenchmarkModelRef {
   const separator = value.indexOf(':');
   const provider = value.slice(0, separator);
   const modelId = value.slice(separator + 1);
-  return (provider === 'ghcp' || provider === 'codi') && modelId.length > 0;
+  return (provider === 'ghcp' || provider === 'codi' || provider === 'local') && modelId.length > 0;
 }
 
 export function isBenchmarkRoutingSettings(value: unknown): value is BenchmarkRoutingSettings {

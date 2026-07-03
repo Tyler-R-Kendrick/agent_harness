@@ -42,6 +42,44 @@ describe('benchmark model routing', () => {
     ]);
   });
 
+  it('emits no local/Ornith candidates when localModels is absent (default-safe)', () => {
+    expect(candidates.some((candidate) => candidate.provider === 'local')).toBe(false);
+  });
+
+  it('emits local/Ornith candidates only when localModels are provided', () => {
+    const withLocal = buildBenchmarkRoutingCandidates({
+      copilotModels: [{ id: 'gpt-4.1', name: 'GPT-4.1', reasoning: true, vision: true }],
+      installedModels: [],
+      localModels: [
+        { id: 'ornith/llama-3.2-1b', label: 'Ornith Llama 3.2 1B', task: 'text-generation', sizeMB: 800 },
+      ],
+    });
+
+    expect(withLocal.map((candidate) => candidate.ref)).toEqual([
+      'ghcp:gpt-4.1',
+      'local:ornith/llama-3.2-1b',
+    ]);
+    const local = withLocal.find((candidate) => candidate.provider === 'local');
+    expect(local?.modelId).toBe('ornith/llama-3.2-1b');
+    expect(local?.label).toBe('Ornith Llama 3.2 1B');
+  });
+
+  it('enforce-routes to a local/Ornith candidate when only local models are available', () => {
+    const localOnly = buildBenchmarkRoutingCandidates({
+      copilotModels: [],
+      installedModels: [],
+      localModels: [{ id: 'ornith/llama-3.2-1b', label: 'Ornith Llama 3.2 1B', task: 'text-generation', sizeMB: 800 }],
+    });
+    const route = recommendBenchmarkRoute({
+      taskClass: 'verification',
+      candidates: localOnly,
+      settings: { ...DEFAULT_BENCHMARK_ROUTING_SETTINGS, objective: 'quality' },
+    });
+
+    expect(route?.candidate.provider).toBe('local');
+    expect(route?.candidate.ref).toBe('local:ornith/llama-3.2-1b');
+  });
+
   it('honors a valid per-task pin before auto scoring', () => {
     const route = recommendBenchmarkRoute({
       taskClass: 'verification',
@@ -136,6 +174,10 @@ describe('benchmark model routing', () => {
 
   it('validates persisted routing settings', () => {
     expect(isBenchmarkRoutingSettings(DEFAULT_BENCHMARK_ROUTING_SETTINGS)).toBe(true);
+    expect(isBenchmarkRoutingSettings({
+      ...DEFAULT_BENCHMARK_ROUTING_SETTINGS,
+      pins: { verification: 'local:ornith/llama-3.2-1b' },
+    })).toBe(true);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, routerMode: 'shadow', minConfidence: 0.5, complexityThreshold: 0.6, escalationKeywords: [], sessionPinning: true, objective: 'fast', pins: {} })).toBe(false);
     expect(isBenchmarkRoutingSettings({ enabled: true, objective: 'cost', pins: { planning: 1 } })).toBe(false);
