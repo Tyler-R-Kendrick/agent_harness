@@ -14,7 +14,7 @@
     "check:generated-files": "pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-generated-files-clean.ps1",
     "test:api": "node --test --experimental-transform-types api/jsonBody.test.ts",
     "test:coverage:api": "node --test --experimental-transform-types --experimental-test-coverage --test-coverage-include=api/jsonBody.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 api/jsonBody.test.ts",
-    "test:root-scripts": "node scripts/run-extension-workspaces.test.mjs && node scripts/apply-workspace-patches.test.mjs && node scripts/check-package-publish-allowlists.test.mjs && node scripts/check-generated-files-clean.test.mjs && node scripts/check-node-diagnostic-artifacts.test.mjs && node scripts/check-browser-debug-artifacts.test.mjs && node scripts/check-local-daemon-artifacts.test.mjs && node scripts/check-gitattributes-hygiene.test.mjs && node --test scripts/run-package-bin.test.mjs && node scripts/prepare-workspace-tests.test.mjs",
+    "test:root-scripts": "node scripts/run-extension-workspaces.test.mjs && node scripts/apply-workspace-patches.test.mjs && node scripts/check-package-publish-allowlists.test.mjs && node scripts/check-generated-files-clean.test.mjs && node scripts/check-scaffold-in-sync.test.mjs && node scripts/check-node-diagnostic-artifacts.test.mjs && node scripts/check-browser-debug-artifacts.test.mjs && node scripts/check-crash-dump-artifacts.test.mjs && node scripts/check-local-daemon-artifacts.test.mjs && node scripts/check-gitattributes-hygiene.test.mjs && node --test scripts/run-package-bin.test.mjs && node scripts/prepare-workspace-tests.test.mjs",
     "lint:extensions": "node scripts/run-extension-workspaces.mjs lint",
     "build:extensions": "node scripts/run-extension-workspaces.mjs build",
     "build:extension-downloads": "node scripts/package-extension-downloads.mjs",
@@ -30,6 +30,7 @@
     "prepare:workspace-tests": "node scripts/prepare-workspace-tests.mjs"
   },
   "overrides": {
+    "@agentv/eval": "4.41.1",
     "@anthropic-ai/sdk": "0.95.0",
     "@anthropic-ai/claude-agent-sdk": "0.2.90",
     "@tavily/core": "0.7.3",
@@ -43,7 +44,7 @@
     "ip-address": "10.2.0",
     "sqlite3": "6.0.1",
     "tar": "7.5.13",
-    "undici": "7.25.0",
+    "undici": "7.28.0",
     "express-rate-limit": {
       "ip-address": "10.2.0"
     }

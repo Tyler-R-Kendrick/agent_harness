@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Programming with Data (arXiv:2604.24819)
 
 - Paper: **Programming with Data: Test-Driven Data Engineering for Self-Improving LLMs from Raw Corpora**

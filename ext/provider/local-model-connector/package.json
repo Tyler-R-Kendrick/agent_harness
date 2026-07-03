@@ -2,6 +2,12 @@
   "name": "@agent-harness/ext-local-model-connector",
   "version": "0.1.0",
   "description": "Browser extension and PWA client assets for connecting approved web apps to local OpenAI-compatible endpoints.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tyler-R-Kendrick/agent_harness.git",
+    "directory": "ext/provider/local-model-connector"
+  },
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",

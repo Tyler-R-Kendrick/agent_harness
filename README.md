@@ -24,7 +24,7 @@ This repository is most useful for contributors working on the `agent-browser` p
 
 ### Prerequisites
 
-- Node.js and npm compatible with the workspace dependencies
+- Node.js 20.x and npm
 - A local checkout of this repository
 
 ### Install dependencies
@@ -64,6 +64,22 @@ npm run visual:agent-browser
 ```
 
 The visual smoke script writes a screenshot to `output/playwright/agent-browser-visual-smoke.png`.
+
+### Run focused workspace validation in Codex automation shells
+
+Before running a workspace-local `test`, `test:coverage`, `lint`, or `build` command that depends on package-local tools such as Vitest from a Codex Windows automation session, prepare that workspace first:
+
+```bash
+npm.cmd run prepare:workspace-tests -- --workspace <workspace-name>
+```
+
+Example for `agent-browser`:
+
+```bash
+npm.cmd run prepare:workspace-tests -- --workspace agent-browser
+```
+
+Use this preparation step before targeted commands such as `npm.cmd --workspace agent-browser run test:coverage` so missing local runners are treated as a setup problem instead of a false documentation or verification failure.
 
 ## Codespaces Note
 

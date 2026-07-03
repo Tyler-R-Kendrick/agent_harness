@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # SkillOS (arXiv:2605.06614)
 
 - Paper: **SkillOS: Learning Skill Curation for Self-Evolving Agents**

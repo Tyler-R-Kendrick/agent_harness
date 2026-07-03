@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Hybrid-Memory Autonomous Agent (MarkTechPost, May 12, 2026)
 
 - **Title:** Build a Hybrid-Memory Autonomous Agent with Modular Architecture and Tool Dispatch Using OpenAI

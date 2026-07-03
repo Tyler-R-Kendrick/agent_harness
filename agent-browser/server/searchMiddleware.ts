@@ -1,3 +1,5 @@
+import type { LookupAddress } from 'node:dns';
+import { lookup as nodeLookup } from 'node:dns/promises';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { JSDOM } from 'jsdom';
 import { isJsonBodyError, readJsonBody } from './jsonBody';
@@ -69,6 +71,7 @@ export interface ReadWebPageResult {
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 type SearchBridgeEnv = Partial<Record<string, string | undefined>>;
+type LookupLike = (hostname: string, options: { all: true; verbatim: true }) => Promise<LookupAddress[]>;
 type ConfiguredSearchProvider = {
   id: string;
   search: (request: { query: string; limit: number; signal?: AbortSignal }) => Promise<SearchWebResultItem[]>;
@@ -76,6 +79,7 @@ type ConfiguredSearchProvider = {
 
 const SEARCH_PROVIDER_ATTEMPTS = 2;
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const MAX_WEB_PAGE_REDIRECTS = 5;
 const CONFIGURED_WEB_SEARCH_PROVIDERS: readonly ConfiguredWebSearchProviderId[] = [
   'searxng',
   'perplexity',
@@ -271,15 +275,16 @@ export class WebPageBridge {
   constructor(
     private readonly fetchImpl: FetchLike = fetch,
     private readonly timeoutMs = DEFAULT_FETCH_TIMEOUT_MS,
+    private readonly lookupImpl: LookupLike = nodeLookup,
   ) {}
 
   async read(request: ReadWebPageRequest): Promise<ReadWebPageResult> {
     const normalizedUrl = normalizeUrl(request.url.trim());
-    const urlResult = safeHttpUrl(normalizedUrl);
+    const urlResult = await safeWebPageUrl(normalizedUrl, this.lookupImpl);
     if (!urlResult.ok) {
       return {
         status: 'blocked',
-        url: normalizedUrl,
+        url: urlResult.url,
         reason: urlResult.reason,
         links: [],
         jsonLd: [],
@@ -290,16 +295,23 @@ export class WebPageBridge {
     const url = urlResult.url;
 
     try {
-      const response = await fetchWithTimeout(this.fetchImpl, url.toString(), {
-        headers: {
-          'User-Agent': 'agent-browser/0.1 (+https://localhost)',
-          Accept: 'text/html,application/xhtml+xml,text/plain',
-        },
-      }, this.timeoutMs);
+      const responseResult = await fetchWebPageResponse(this.fetchImpl, url, this.timeoutMs, this.lookupImpl);
+      if (responseResult.kind === 'blocked') {
+        return {
+          status: 'blocked',
+          url: responseResult.url,
+          reason: responseResult.reason,
+          links: [],
+          jsonLd: [],
+          entities: [],
+          observations: [],
+        };
+      }
+      const { response, url: finalUrl } = responseResult;
       if (!response.ok) {
         return {
           status: 'unavailable',
-          url: url.toString(),
+          url: finalUrl.toString(),
           reason: `Web page provider returned ${response.status}.`,
           links: [],
           jsonLd: [],
@@ -307,24 +319,24 @@ export class WebPageBridge {
           observations: [],
         };
       }
-      const document = parseHtmlDocument(await response.text(), url.toString());
+      const document = parseHtmlDocument(await response.text(), finalUrl.toString());
       const jsonLd = extractJsonLd(document);
       removeNonContentBlocks(document);
       const root = document.body ?? document.documentElement;
       const title = extractTitle(document);
-      const links = extractLinks(root, url);
+      const links = extractLinks(root, finalUrl);
       const headings = extractHeadings(root);
       const text = readableText(root).slice(0, 5000);
-      const observations = extractPageObservations({ url: url.toString(), text, links, headings, jsonLd });
+      const observations = extractPageObservations({ url: finalUrl.toString(), text, links, headings, jsonLd });
       return {
         status: 'read',
-        url: url.toString(),
+        url: finalUrl.toString(),
         ...(title ? { title } : {}),
         ...(text ? { text } : {}),
         links,
         jsonLd,
         observations,
-        entities: extractPageEntities({ url: url.toString(), title, text, jsonLd }),
+        entities: extractPageEntities({ url: finalUrl.toString(), title, text, jsonLd }),
       };
     } catch (error) {
       return {
@@ -340,7 +352,54 @@ export class WebPageBridge {
   }
 }
 
+type FetchWebPageResult =
+  | { kind: 'response'; url: URL; response: Response }
+  | { kind: 'blocked'; url: string; reason: string };
+
 const pageBridge = new WebPageBridge();
+
+async function fetchWebPageResponse(
+  fetchImpl: FetchLike,
+  initialUrl: URL,
+  timeoutMs: number,
+  lookupImpl: LookupLike,
+): Promise<FetchWebPageResult> {
+  let currentUrl = initialUrl;
+  for (let redirectCount = 0; redirectCount <= MAX_WEB_PAGE_REDIRECTS; redirectCount += 1) {
+    const response = await fetchWithTimeout(fetchImpl, currentUrl.toString(), {
+      headers: {
+        'User-Agent': 'agent-browser/0.1 (+https://localhost)',
+        Accept: 'text/html,application/xhtml+xml,text/plain',
+      },
+      redirect: 'manual',
+    }, timeoutMs);
+
+    if (!isRedirectStatus(response.status)) {
+      return { kind: 'response', url: currentUrl, response };
+    }
+
+    const location = response.headers.get('location');
+    if (!location) {
+      return { kind: 'response', url: currentUrl, response };
+    }
+    if (redirectCount === MAX_WEB_PAGE_REDIRECTS) {
+      throw new Error(`Web page provider redirected more than ${MAX_WEB_PAGE_REDIRECTS} times.`);
+    }
+
+    const redirectUrl = normalizeUrl(resolveProviderUrl(location, currentUrl.toString()));
+    const redirectResult = await safeWebPageUrl(redirectUrl, lookupImpl);
+    if (!redirectResult.ok) {
+      return { kind: 'blocked', url: redirectResult.url, reason: redirectResult.reason };
+    }
+    currentUrl = redirectResult.url;
+  }
+
+  throw new Error(`Web page provider redirected more than ${MAX_WEB_PAGE_REDIRECTS} times.`);
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
 
 async function fetchWithTimeout(
   fetchImpl: FetchLike,
@@ -451,6 +510,24 @@ function safeHttpUrl(value: string): { ok: true; url: URL } | { ok: false; reaso
   } catch {
     return { ok: false, reason: 'Only http and https URLs can be read.' };
   }
+}
+
+async function safeWebPageUrl(
+  value: string,
+  lookupImpl: LookupLike,
+): Promise<{ ok: true; url: URL } | { ok: false; url: string; reason: string }> {
+  const result = safeHttpUrl(value);
+  if (!result.ok) {
+    return { ok: false, url: value, reason: result.reason };
+  }
+  if (await resolvesToPrivateAddress(result.url, lookupImpl)) {
+    return {
+      ok: false,
+      url: result.url.toString(),
+      reason: 'Web page URL must not resolve to a private address.',
+    };
+  }
+  return result;
 }
 
 function normalizeHostname(hostname: string): string {
@@ -636,6 +713,26 @@ function isPublicWebHostname(hostname: string): boolean {
   }
 
   return !isPrivateIpv4Hostname(normalized) && !isPrivateIpv6Hostname(normalized);
+}
+
+async function resolvesToPrivateAddress(url: URL, lookupImpl: LookupLike): Promise<boolean> {
+  const normalizedHostname = normalizeHostname(url.hostname);
+  if (isPrivateIpv4Hostname(normalizedHostname) || isPrivateIpv6Hostname(normalizedHostname)) {
+    return true;
+  }
+  if (isIpv4Hostname(normalizedHostname) || normalizedHostname.includes(':')) {
+    return false;
+  }
+
+  try {
+    const addresses = await lookupImpl(normalizedHostname, { all: true, verbatim: true });
+    return addresses.some(({ address }) => {
+      const normalizedAddress = normalizeHostname(address);
+      return isPrivateIpv4Hostname(normalizedAddress) || isPrivateIpv6Hostname(normalizedAddress);
+    });
+  } catch {
+    return false;
+  }
 }
 
 function extractTitle(document: Document): string | undefined {

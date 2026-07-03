@@ -158,6 +158,10 @@ async function main() {
   const extReadme = await readScript('ext/README.md');
   const workerReadme = await readScript('lib/worker/README.md');
   const durableTasksReadme = await readScript('lib/browser-durable-tasks/README.md');
+  assert.match(rootReadme, /Node\.js 20\.x and npm/);
+  assert.match(rootReadme, /## Run focused workspace validation in Codex automation shells/);
+  assert.match(rootReadme, /npm\.cmd run prepare:workspace-tests -- --workspace <workspace-name>/);
+  assert.match(rootReadme, /npm\.cmd run prepare:workspace-tests -- --workspace agent-browser/);
   assert.match(rootReadme, /## Workspace packages/);
   assert.match(rootReadme, /\|\s*Workspace\s*\|\s*Import path\s*\|\s*Purpose\s*\|/);
   assert.match(rootReadme, /\[`agent-browser\/README\.md`\]\(\.\/agent-browser\/README\.md\)/);

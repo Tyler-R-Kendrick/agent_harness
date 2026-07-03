@@ -114,6 +114,9 @@ competition/<product-slug>/
 | Sigil Browser | Enterprise secure browser agent | `competition/sigil-browser` |
 | Zapier BrowserAct | Workflow browser automation MCP | `competition/zapier-browseract` |
 | Chrome MCP Server | Open-source local browser MCP | `competition/chrome-mcp-server` |
+| Browser Operator | Open-source AI browser | `competition/browser-operator` |
+| OpenClaw | Self-hosted personal AI assistant | `competition/openclaw` |
+| Fazm | Local desktop computer agent | `competition/fazm` |
 
 ## Cross-Market Takeaways
 
@@ -175,3 +178,6 @@ competition/<product-slug>/
 - Enterprise guardrail products such as Sigil show that local real-Chrome control is moving from hobby MCP servers into security-led buying language. Network-level policy, semantic snapshots, and audit logs validate `agent-browser`'s authority-boundary wedge, but raise expectations for policy feedback and recovery when an agent is blocked.
 - Zapier BrowserAct shows another distribution path: browser work can be exposed as a scoped MCP action inside a large workflow ecosystem. That can capture operators who already trust Zapier for app plumbing, while leaving a browser-first opening around page-level evidence, screenshots, replay, and silent-failure detection.
 - Popular open-source projects such as Chrome MCP Server make real-session browser control easy to copy into developer workflows. The threat is adoption speed; the weakness is connection health, setup complexity, and the lack of a packaged audit/recovery product layer.
+- Local AI-browser products such as Browser Operator show that users still want a complete browser surface when they can choose the model provider and keep execution local. The weakness is that provider setup, context routing, platform support, and security boundaries can become product work before the agent itself feels reliable.
+- Always-on personal assistants such as OpenClaw pull browser work into messaging channels and local skills. They validate ambient delegation, but malicious-skill incidents make executable extension provenance, sandboxing, and audit evidence non-negotiable.
+- Desktop agents such as Fazm broaden the category again: browser automation is one mode inside full-computer control. That raises user expectations for local privacy, team workflow reuse, and audit logs, while creating an opening for `agent-browser` to stay narrower and prove page-level actions with better screenshots, traces, and recovery controls.

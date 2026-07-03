@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # StraTA (arXiv:2605.06642)
 
 - Paper: **StraTA: Incentivizing Agentic Reinforcement Learning with Strategic Trajectory Abstraction**

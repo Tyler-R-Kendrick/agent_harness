@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Ctx2Skill (arXiv:2604.27660)
 
 - Paper: **From Context to Skills: Can Language Models Learn from Context Skillfully?**

@@ -1,3 +1,7 @@
+---
+type: research-packet
+---
+
 # Proxy-Pointer RAG (Towards Data Science, 2026)
 
 - Paper/article: **Proxy-Pointer RAG: Multimodal Answers Without Multimodal Embeddings**
