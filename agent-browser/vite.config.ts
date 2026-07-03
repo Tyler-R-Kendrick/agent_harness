@@ -131,6 +131,10 @@ export default defineConfig({
         replacement: path.resolve(__dirname, '../lib/agent-sandbox/src/index.ts'),
       },
       {
+        find: '@agent-harness/sandbox-policy',
+        replacement: path.resolve(__dirname, '../lib/sandbox-policy/src/index.ts'),
+      },
+      {
         find: '@agent-harness/prompt-budget',
         replacement: path.resolve(__dirname, '../lib/prompt-budget/src/index.ts'),
       },

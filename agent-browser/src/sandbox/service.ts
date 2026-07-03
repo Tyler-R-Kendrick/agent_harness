@@ -1,4 +1,5 @@
 import { BrowserSandboxProvider, WebContainerBrowserSandboxProvider, type SkillSandbox } from '@agent-harness/agent-sandbox';
+import type { CompiledSandboxPolicy } from '@agent-harness/sandbox-policy';
 import { getSandboxFeatureFlags, type SandboxFeatureFlags } from '../features/flags';
 import { SandboxBootstrapError, type IframeSandboxSessionOptions } from './iframe-session';
 import { persistArtifactsToVirtualFileSystem, type WritableVirtualFileSystem } from './persist';
@@ -58,6 +59,13 @@ export interface SandboxedExecutionServiceOptions {
   createIframeSession?: (options: IframeSandboxSessionOptions) => SandboxSession;
   createLegacySession?: () => Promise<LegacyExecutionSession> | LegacyExecutionSession;
   persistenceTarget?: WritableVirtualFileSystem;
+  /**
+   * Phase 1 opt-in: a compiled OpenShell-style sandbox policy. When present, its
+   * `browserOptions` (network origins/methods, byte and timeout caps) configure
+   * the default browser sandbox provider. When absent (the default), the
+   * adapter uses its built-in defaults, so behavior is unchanged.
+   */
+  policy?: CompiledSandboxPolicy;
 }
 
 type AgentSandboxRuntime = 'quickjs' | 'webcontainer';
@@ -300,7 +308,7 @@ export function createSandboxExecutionService(options: SandboxedExecutionService
         }
         return runtime === 'webcontainer'
           ? new WebContainerBrowserSandboxProvider()
-          : new BrowserSandboxProvider();
+          : new BrowserSandboxProvider(options.policy?.browserOptions);
       },
     });
   };

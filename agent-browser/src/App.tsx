@@ -295,6 +295,7 @@ import {
 } from './services/sessionFsPath';
 import { parseSandboxPrompt } from './sandbox/prompt';
 import { createSandboxExecutionService } from './sandbox/service';
+import { resolveSandboxPolicyFromFs } from './sandbox/policySource';
 import { buildRunSummaryInput } from './sandbox/summarize-run';
 import {
   createMessageCopyLabel,
@@ -4101,8 +4102,13 @@ function ChatPanel({
     }
 
     const bash = getSessionBash(activeSessionId);
+    const sandboxPolicy = await resolveSandboxPolicyFromFs({
+      enabled: sandboxFlags.sandboxPolicyEnabled,
+      reader: bash.fs,
+    });
     const service = createSandboxExecutionService({
       flags: sandboxFlags,
+      policy: sandboxPolicy,
       persistenceTarget: {
         mkdir: (path, options) => bash.fs.mkdir(path, options),
         writeFile: (path, content, encoding) => bash.fs.writeFile(path, content, encoding ?? 'utf-8'),

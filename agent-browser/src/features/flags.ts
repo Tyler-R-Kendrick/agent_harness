@@ -13,6 +13,14 @@ export interface SandboxFeatureFlags {
    * populates it.
    */
   mcpClientEnabled?: boolean;
+  /**
+   * Phase 1 opt-in flag for OpenShell-style sandbox policies. Default off: when
+   * off, sandbox execution uses the existing adapter defaults. When on and a
+   * workspace policy document is present, the compiled policy drives the
+   * browser sandbox adapter's network/limits config. Optional so pre-existing
+   * flag literals remain valid; the resolver always populates it.
+   */
+  sandboxPolicyEnabled?: boolean;
 }
 
 type FlagEnvironment = Record<string, unknown>;
@@ -72,6 +80,7 @@ export function getSandboxFeatureFlags(
     disableWebContainerAdapter: parseBooleanFlag(resolvedEnvironment.VITE_DISABLE_WEBCONTAINER_SANDBOX_ADAPTER),
     allowSameOriginForWebContainer: parseBooleanFlag(resolvedEnvironment.VITE_ALLOW_SANDBOX_SAME_ORIGIN),
     mcpClientEnabled: parseBooleanFlag(resolvedEnvironment.VITE_MCP_CLIENT),
+    sandboxPolicyEnabled: parseBooleanFlag(resolvedEnvironment.VITE_SANDBOX_POLICY),
   };
 }
 

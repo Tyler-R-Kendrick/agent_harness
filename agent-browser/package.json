@@ -43,6 +43,7 @@
   },
   "dependencies": {
     "@agent-harness/agent-sandbox": "0.1.0",
+    "@agent-harness/sandbox-policy": "0.1.0",
     "@agent-harness/ext-agent-skills": "0.1.0",
     "@agent-harness/ext-agents-md": "0.1.0",
     "@agent-harness/ext-artifacts": "0.1.0",
